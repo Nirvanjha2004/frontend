@@ -4,7 +4,7 @@ import { Provider } from 'react-redux';
 import { ThemeProvider, createTheme } from '@mui/material/styles';
 import CssBaseline from '@mui/material/CssBaseline';
 import { store } from './store/store';
-import Dashboard from './pages/Dashboard';
+import Unibox from './components/Unibox';
 import Login from './pages/Login';
 import Register from './pages/Register';
 import Campaigns from './pages/Campaigns';
@@ -128,11 +128,11 @@ function App() {
               
               {/* Private routes */}
               <Route
-                path="/dashboard"
+                path="/messages"
                 element={
                   <PrivateRoute>
                     <Layout>
-                      <Dashboard />
+                      <Unibox />
                     </Layout>
                   </PrivateRoute>
                 }
@@ -189,10 +189,10 @@ function App() {
               />
               
               {/* Root redirect */}
-              <Route path="/" element={<Navigate to="/dashboard" replace />} />
+              <Route path="/" element={<Navigate to="/messages" replace />} />
               
               {/* Redirect unknown routes */}
-              <Route path="*" element={<Navigate to="/dashboard" replace />} />
+              <Route path="*" element={<Navigate to="/messages" replace />} />
             </Routes>
           </AuthInitializer>
         </Router>

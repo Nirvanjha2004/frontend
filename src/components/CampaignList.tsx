@@ -3,7 +3,6 @@ import { useNavigate } from 'react-router-dom';
 import {
   Box,
   Card,
-  CardContent,
   Typography,
   Table,
   TableBody,
@@ -20,6 +19,10 @@ import {
   Alert,
   CircularProgress,
   Button,
+  Avatar,
+  LinearProgress,
+  useTheme,
+  alpha,
 } from '@mui/material';
 import {
   MoreVert,
@@ -29,7 +32,10 @@ import {
   PlayArrow,
   Pause,
   Stop,
-  Refresh
+  Refresh,
+  FilterList as FilterIcon,
+  SortByAlpha as SortIcon,
+  Add,
 } from '@mui/icons-material';
 import { formatDistanceToNow } from 'date-fns';
 import { apiCall } from '../utils/api';
@@ -61,12 +67,21 @@ interface CampaignListProps {
 
 const CampaignList: React.FC<CampaignListProps> = ({ onRefresh }) => {
   const navigate = useNavigate();
+  const theme = useTheme();
   const [campaigns, setCampaigns] = useState<Campaign[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [anchorEl, setAnchorEl] = useState<null | HTMLElement>(null);
   const [selectedCampaign, setSelectedCampaign] = useState<Campaign | null>(null);
 
+
+  function handleRefresh(event: React.MouseEvent<HTMLButtonElement, MouseEvent>): void {
+    event.preventDefault();
+    setError(null);
+    setLoading(true);
+    fetchCampaigns();
+    if (onRefresh) onRefresh();
+  }
   useEffect(() => {
     fetchCampaigns();
   }, []);
@@ -75,12 +90,12 @@ const CampaignList: React.FC<CampaignListProps> = ({ onRefresh }) => {
     try {
       setLoading(true);
       const response = await apiCall('/api/campaigns');
-      
+
       if (response.status === 401) {
         setError('Authentication required. Please log in to view campaigns.');
         return;
       }
-      
+
       const data = await response.json();
 
       console.log('Fetched campaigns:', data);
@@ -125,7 +140,7 @@ const CampaignList: React.FC<CampaignListProps> = ({ onRefresh }) => {
         const response = await apiCall(`/api/campaigns/${campaignId}`, {
           method: 'DELETE',
         });
-        
+
         if (response.ok) {
           fetchCampaigns(); // Refresh the list
         } else {
@@ -138,12 +153,12 @@ const CampaignList: React.FC<CampaignListProps> = ({ onRefresh }) => {
     handleMenuClose();
   };
 
-  const handleCampaignAction = async (campaignId: string, action: 'start' | 'pause' | 'stop') => {
+  const handleCampaignAction = async (campaignId: string, action: 'start' | 'pause' | 'stop' | 'resume') => {
     try {
       const response = await apiCall(`/api/campaigns/${campaignId}/${action}`, {
         method: 'POST',
       });
-      
+
       if (response.ok) {
         fetchCampaigns(); // Refresh the list
       } else {
@@ -168,16 +183,131 @@ const CampaignList: React.FC<CampaignListProps> = ({ onRefresh }) => {
     return colors[status] || 'default';
   };
 
-  const formatNumber = (num: number): string => {
-    if (!num) return '0';
-    if (num >= 1000000) return (num / 1000000).toFixed(1) + 'M';
-    if (num >= 1000) return (num / 1000).toFixed(1) + 'K';
-    return num.toString();
+  const getStatusColorHex = (status: string): string => {
+    const colors: Record<string, string> = {
+      active: theme.palette.success.main,
+      running: theme.palette.success.main,
+      completed: theme.palette.primary.main,
+      paused: theme.palette.warning.main,
+      draft: theme.palette.info.main,
+      failed: theme.palette.error.main,
+      stopped: theme.palette.grey[500]
+    };
+    return colors[status] || theme.palette.grey[500];
   };
 
-  const handleRefresh = () => {
-    fetchCampaigns();
-    if (onRefresh) onRefresh();
+  const getProgressPercentage = (campaign: Campaign): number => {
+    const total = campaign.stats?.totalActions || 0;
+    const completed = campaign.stats?.completedActions || 0;
+
+    if (total === 0) return 0;
+    return Math.min(Math.round((completed / total) * 100), 100);
+  };
+
+  const getProgressColor = (campaign: Campaign): string => {
+    const percentage = getProgressPercentage(campaign);
+
+    if (percentage >= 80) return theme.palette.success.main;
+    if (percentage >= 50) return theme.palette.primary.main;
+    if (percentage >= 25) return theme.palette.warning.main;
+    return theme.palette.info.main;
+  };
+
+  const formatDate = (dateString: string): string => {
+    try {
+      return formatDistanceToNow(new Date(dateString), { addSuffix: true });
+    } catch (error) {
+      return 'Invalid date';
+    }
+  };
+
+  const formatNumber = (num: number): string => {
+    if (num >= 1000000) {
+      return (num / 1000000).toFixed(1) + 'M';
+    } else if (num >= 1000) {
+      return (num / 1000).toFixed(1) + 'K';
+    } else {
+      return num.toString();
+    }
+  };
+
+  const getCampaignActionButton = (campaign: Campaign) => {
+    switch (campaign.status) {
+      case 'active':
+      case 'running':
+        return (
+          <>
+            <Tooltip title="Pause Campaign">
+              <IconButton
+                size="small"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  handleCampaignAction(campaign._id, 'pause');
+                }}
+                sx={{ color: theme.palette.warning.main }}
+              >
+                <Pause fontSize="small" />
+              </IconButton>
+            </Tooltip>
+            <Tooltip title="Stop Campaign">
+              <IconButton
+                size="small"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  handleCampaignAction(campaign._id, 'stop');
+                }}
+                sx={{ color: theme.palette.error.main }}
+              >
+                <Stop fontSize="small" />
+              </IconButton>
+            </Tooltip>
+          </>
+        );
+      case 'paused':
+        return (
+          <>
+            <Tooltip title="Resume Campaign">
+              <IconButton
+                size="small"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  handleCampaignAction(campaign._id, 'resume');
+                }}
+                sx={{ color: theme.palette.success.main }}
+              >
+                <PlayArrow fontSize="small" />
+              </IconButton>
+            </Tooltip>
+            <Tooltip title="Stop Campaign">
+              <IconButton
+                size="small"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  handleCampaignAction(campaign._id, 'stop');
+                }}
+                sx={{ color: theme.palette.error.main }}
+              >
+                <Stop fontSize="small" />
+              </IconButton>
+            </Tooltip>
+          </>
+        );
+      default:
+        return (
+          <Tooltip title="Start Campaign">
+            <IconButton
+              size="small"
+              onClick={(e) => {
+                e.stopPropagation();
+                handleCampaignAction(campaign._id, 'start');
+              }}
+              sx={{ color: theme.palette.success.main }}
+            >
+              <PlayArrow fontSize="small" />
+            </IconButton>
+          </Tooltip>
+        );
+    }
   };
 
   if (loading) {
@@ -189,6 +319,8 @@ const CampaignList: React.FC<CampaignListProps> = ({ onRefresh }) => {
   }
 
   if (error) {
+
+
     return (
       <Alert severity="error" sx={{ mt: 2 }}>
         {error}
@@ -197,8 +329,8 @@ const CampaignList: React.FC<CampaignListProps> = ({ onRefresh }) => {
             Retry
           </Button>
           {error.includes('Authentication required') && (
-            <Button 
-              onClick={() => window.location.href = '/login'} 
+            <Button
+              onClick={() => window.location.href = '/login'}
               variant="contained"
             >
               Go to Login
@@ -211,48 +343,136 @@ const CampaignList: React.FC<CampaignListProps> = ({ onRefresh }) => {
 
   return (
     <Box>
-      {/* Header with refresh button */}
-      <Box display="flex" justifyContent="space-between" alignItems="center" mb={3}>
-        <Typography variant="h5" component="h2">
-          Your Campaigns
-        </Typography>
-        <Button 
-          variant="outlined" 
-          startIcon={<Refresh />}
-          onClick={handleRefresh}
-        >
-          Refresh
-        </Button>
+      {/* Header with actions */}
+      <Box
+        sx={{
+          display: 'flex',
+          justifyContent: 'space-between',
+          alignItems: 'center',
+          mb: 3,
+          flexWrap: 'wrap',
+          gap: 2
+        }}
+      >
+        <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
+          <Typography variant="h5" fontWeight={600}>
+            Your Campaigns
+          </Typography>
+          <Chip
+            label={`${campaigns.length} total`}
+            size="small"
+            sx={{
+              background: alpha(theme.palette.primary.main, 0.1),
+              color: theme.palette.primary.main,
+              fontWeight: 500,
+              px: 1
+            }}
+          />
+        </Box>
+        <Box sx={{ display: 'flex', gap: 2 }}>
+          <Button
+            variant="outlined"
+            size="medium"
+            startIcon={<FilterIcon />}
+            sx={{
+              borderRadius: '8px',
+              textTransform: 'none',
+              fontWeight: 500,
+            }}
+          >
+            Filter
+          </Button>
+          <Button
+            variant="outlined"
+            size="medium"
+            startIcon={<SortIcon />}
+            sx={{
+              borderRadius: '8px',
+              textTransform: 'none',
+              fontWeight: 500,
+            }}
+          >
+            Sort
+          </Button>
+          <Button
+            variant="outlined"
+            startIcon={<Refresh />}
+            onClick={handleRefresh}
+            sx={{
+              borderRadius: '8px',
+              textTransform: 'none',
+              fontWeight: 500,
+            }}
+          >
+            Refresh
+          </Button>
+        </Box>
       </Box>
 
       {/* Campaigns Table */}
-      <Card>
-        <TableContainer component={Paper}>
-          <Table>
-            <TableHead>
+      <Card
+        elevation={0}
+        sx={{
+          borderRadius: 3,
+          overflow: 'hidden',
+          border: '1px solid',
+          borderColor: theme.palette.divider
+        }}
+      >
+        <TableContainer>
+          <Table sx={{ minWidth: 650 }}>
+            <TableHead sx={{ bgcolor: alpha(theme.palette.primary.main, 0.04) }}>
               <TableRow>
-                <TableCell>Campaign</TableCell>
-                <TableCell>Status</TableCell>
-                <TableCell>Leads</TableCell>
-                <TableCell>Actions</TableCell>
-                <TableCell>Progress</TableCell>
-                <TableCell>Created</TableCell>
-                <TableCell>Last Updated</TableCell>
-                <TableCell align="center">Actions</TableCell>
+                <TableCell sx={{ fontWeight: 600, py: 2.5 }}>Campaign</TableCell>
+                <TableCell sx={{ fontWeight: 600, py: 2.5 }}>Status</TableCell>
+                <TableCell sx={{ fontWeight: 600, py: 2.5 }}>Leads</TableCell>
+                <TableCell sx={{ fontWeight: 600, py: 2.5 }}>Actions</TableCell>
+                <TableCell sx={{ fontWeight: 600, py: 2.5 }}>Progress</TableCell>
+                <TableCell sx={{ fontWeight: 600, py: 2.5 }}>Created</TableCell>
+                <TableCell align="center" sx={{ fontWeight: 600, py: 2.5 }}>Manage</TableCell>
               </TableRow>
             </TableHead>
             <TableBody>
               {campaigns.length === 0 ? (
                 <TableRow>
-                  <TableCell colSpan={8} align="center">
-                    <Typography variant="body2" color="textSecondary" sx={{ py: 4 }}>
-                      No campaigns found. Create your first campaign to get started.
-                    </Typography>
+                  <TableCell colSpan={7} align="center">
+                    <Box sx={{ py: 5, display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 2 }}>
+                      <Typography variant="h6" color="text.secondary" fontWeight={500}>
+                        No campaigns found
+                      </Typography>
+                      <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
+                        Create your first campaign to start reaching out to influencers
+                      </Typography>
+                      <Button
+                        variant="contained"
+                        onClick={() => navigate('/campaigns/create')}
+                        startIcon={<Add />}
+                        sx={{
+                          borderRadius: '8px',
+                          textTransform: 'none',
+                          fontWeight: 500,
+                          px: 3
+                        }}
+                      >
+                        Create Campaign
+                      </Button>
+                    </Box>
                   </TableCell>
                 </TableRow>
               ) : (
                 campaigns.map((campaign) => (
-                  <TableRow key={campaign._id} hover>
+                  <TableRow
+                    key={campaign._id}
+                    hover
+                    sx={{
+                      '&:hover': {
+                        bgcolor: alpha(theme.palette.primary.main, 0.04),
+                        cursor: 'pointer'
+                      },
+                      transition: 'background-color 0.2s'
+                    }}
+                    onClick={() => navigate(`/campaigns/${campaign._id}`)}
+                  >
                     <TableCell>
                       <Box>
                         <Typography variant="subtitle2" sx={{ fontWeight: 600 }}>
@@ -332,7 +552,7 @@ const CampaignList: React.FC<CampaignListProps> = ({ onRefresh }) => {
                     </TableCell>
                     <TableCell align="center">
                       <Tooltip title="View Details">
-                        <IconButton 
+                        <IconButton
                           size="small"
                           onClick={() => handleViewCampaign(campaign._id)}
                         >
@@ -340,7 +560,7 @@ const CampaignList: React.FC<CampaignListProps> = ({ onRefresh }) => {
                         </IconButton>
                       </Tooltip>
                       <Tooltip title="More Actions">
-                        <IconButton 
+                        <IconButton
                           size="small"
                           onClick={(e) => handleMenuOpen(e, campaign)}
                         >
@@ -395,7 +615,7 @@ const CampaignList: React.FC<CampaignListProps> = ({ onRefresh }) => {
             Stop Campaign
           </MenuItem>
         )}
-        <MenuItem 
+        <MenuItem
           onClick={() => selectedCampaign && handleDeleteCampaign(selectedCampaign._id)}
           sx={{ color: 'error.main' }}
         >

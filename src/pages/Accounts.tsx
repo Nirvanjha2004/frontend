@@ -19,6 +19,9 @@ import {
   Paper,
   Grid,
   Badge,
+  Container,
+  useTheme,
+  alpha,
 } from '@mui/material';
 import {
   Instagram as InstagramIcon,
@@ -35,6 +38,7 @@ import {
   Cookie as CookieIcon,
   Security as SecurityIcon,
   Refresh as RefreshIcon,
+  Diversity3 as DiversityIcon,
 } from '@mui/icons-material';
 import { useAppSelector, useAppDispatch } from '../hooks/redux';
 import axios from 'axios';
@@ -214,9 +218,9 @@ const Accounts: React.FC = () => {
         p: 8,
         textAlign: 'center',
         bgcolor: 'background.paper',
-        border: '2px dashed',
-        borderColor: 'grey.300',
-        borderRadius: 3,
+        border: '1px dashed',
+        borderColor: 'divider',
+        borderRadius: 1,
       }}
     >
       <Box sx={{ mb: 4 }}>
@@ -265,11 +269,102 @@ const Accounts: React.FC = () => {
         size="large"
         startIcon={<AddIcon />}
         onClick={() => setConnectDialogOpen(true)}
-        sx={{ px: 4, py: 1.5, fontSize: '1.1rem' }}
+        sx={{ 
+          px: 4, 
+          py: 1.5, 
+          fontSize: '1rem', 
+          borderRadius: 1,
+          textTransform: 'none',
+          boxShadow: '0 2px 5px rgba(0,0,0,0.1)'
+        }}
       >
         Connect Your First Account
       </Button>
     </Paper>
+  );
+
+  const ListAccountCard = ({ account }: { account: InstagramAccount }) => (
+    <Box 
+      component="div"
+      sx={{
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'space-between',
+        p: 2,
+        borderBottom: '1px solid',
+        borderColor: 'divider',
+        '&:hover': {
+          bgcolor: 'rgba(0,0,0,0.01)'
+        }
+      }}
+    >
+      <Box sx={{ display: 'flex', alignItems: 'center', gap: 2, flexGrow: 1 }}>
+        <Avatar
+          src={account.profilePicture}
+          sx={{ width: 40, height: 40 }}
+        >
+          {account.username && account.username.charAt(0).toUpperCase()}
+        </Avatar>
+        
+        <Box>
+          <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+            <Typography variant="body1" fontWeight={600}>
+              {account.fullName || `@${account.username}`}
+            </Typography>
+            {account.isVerified && (
+              <CheckCircleIcon sx={{ fontSize: 16, color: 'primary.main' }} />
+            )}
+          </Box>
+          <Typography variant="caption" color="text.secondary" display="block">
+            {account.fullName ? `@${account.username}` : ''}
+          </Typography>
+        </Box>
+      </Box>
+
+      <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
+        <Chip
+          label={getStatusText(account.authStatus)}
+          color={getStatusColor(account.authStatus) as any}
+          size="small"
+          sx={{ 
+            height: 24,
+            borderRadius: 0.5,
+            '.MuiChip-label': { px: 1, fontSize: '0.75rem' }
+          }}
+        />
+        
+        <Box sx={{ display: 'flex', alignItems: 'center' }}>
+          <Box sx={{ display: 'flex', alignItems: 'center', mr: 3 }}>
+            <InstagramIcon fontSize="small" color="action" sx={{ mr: 0.5 }} />
+            <Typography variant="body2" color="text.secondary">
+              {formatNumber(account.followersCount)}
+            </Typography>
+          </Box>
+          
+          <IconButton 
+            size="small" 
+            onClick={(e) => {
+              e.stopPropagation();
+              handleToggleStatus(account.id);
+            }}
+            color={account.isActive ? "success" : "default"}
+            sx={{ mr: 1 }}
+          >
+            <CheckCircleIcon fontSize="small" />
+          </IconButton>
+          
+          <IconButton 
+            size="small"
+            onClick={(e) => {
+              e.stopPropagation();
+              handleDeleteAccount(account.id);
+            }}
+          >
+            <MoreVertIcon fontSize="small" />
+          </IconButton>
+        </Box>
+      </Box>
+    </Box>
   );
 
   const AccountCard = ({ account }: { account: InstagramAccount }) => (
@@ -277,9 +372,12 @@ const Accounts: React.FC = () => {
       sx={{
         position: 'relative',
         transition: 'all 0.2s ease-in-out',
+        borderRadius: 1,
+        border: '1px solid',
+        borderColor: 'divider',
+        boxShadow: '0 1px 3px rgba(0,0,0,0.08)',
         '&:hover': {
-          transform: 'translateY(-2px)',
-          boxShadow: 3,
+          boxShadow: '0 2px 6px rgba(0,0,0,0.12)',
         },
       }}
     >
@@ -298,7 +396,7 @@ const Accounts: React.FC = () => {
                 src={account.profilePicture}
                 sx={{ width: 56, height: 56 }}
               >
-                {account.username.charAt(0).toUpperCase()}
+                {account.username && account.username.charAt(0)}
               </Avatar>
             </Badge>
             <Box>
@@ -315,7 +413,12 @@ const Accounts: React.FC = () => {
                 label={getStatusText(account.authStatus)}
                 color={getStatusColor(account.authStatus) as any}
                 size="small"
-                sx={{ mt: 0.5 }}
+                sx={{ 
+                  mt: 0.5, 
+                  borderRadius: 0.5,
+                  height: 24,
+                  '.MuiChip-label': { px: 1, fontSize: '0.75rem' }
+                }}
               />
               {account.fullName && (
                 <Typography variant="caption" color="text.secondary" display="block">
@@ -339,6 +442,12 @@ const Accounts: React.FC = () => {
             size="small"
             color={account.hasCookies ? 'success' : 'default'}
             variant={account.hasCookies ? 'filled' : 'outlined'}
+            sx={{ 
+              borderRadius: 0.5,
+              height: 24,
+              '.MuiChip-label': { px: 1, fontSize: '0.75rem' },
+              '.MuiChip-icon': { fontSize: '0.9rem' }
+            }}
           />
           <Chip
             icon={<SecurityIcon />}
@@ -346,12 +455,23 @@ const Accounts: React.FC = () => {
             size="small"
             color={account.hasHeaders ? 'success' : 'default'}
             variant={account.hasHeaders ? 'filled' : 'outlined'}
+            sx={{ 
+              borderRadius: 0.5,
+              height: 24,
+              '.MuiChip-label': { px: 1, fontSize: '0.75rem' },
+              '.MuiChip-icon': { fontSize: '0.9rem' }
+            }}
           />
           <Chip
-            label={account.connectionSource.toUpperCase()}
+            label={account.connectionSource}
             size="small"
             color="primary"
             variant="outlined"
+            sx={{ 
+              borderRadius: 0.5,
+              height: 24,
+              '.MuiChip-label': { px: 1, fontSize: '0.75rem' }
+            }}
           />
         </Box>
 
@@ -409,11 +529,23 @@ const Accounts: React.FC = () => {
               variant={account.isActive ? 'contained' : 'outlined'}
               color={account.isActive ? 'success' : 'primary'}
               onClick={() => handleToggleStatus(account.id)}
+              sx={{
+                borderRadius: 0.5,
+                textTransform: 'none',
+                boxShadow: 'none',
+                fontSize: '0.8rem',
+                px: 2
+              }}
             >
               {account.isActive ? 'Active' : 'Inactive'}
             </Button>
-            <IconButton size="small" color="error" onClick={() => handleDeleteAccount(account.id)}>
-              <DeleteIcon />
+            <IconButton 
+              size="small" 
+              color="error" 
+              onClick={() => handleDeleteAccount(account.id)}
+              sx={{ borderRadius: 0.5 }}
+            >
+              <DeleteIcon fontSize="small" />
             </IconButton>
           </Box>
         </Box>
@@ -440,7 +572,12 @@ const Accounts: React.FC = () => {
               startIcon={<RefreshIcon />}
               onClick={handleRefreshAccounts}
               disabled={isRefreshing}
-              sx={{ px: 3 }}
+              sx={{ 
+                px: 3, 
+                borderRadius: 1,
+                textTransform: 'none',
+                borderColor: 'divider'
+              }}
             >
               {isRefreshing ? 'Refreshing...' : 'Refresh'}
             </Button>
@@ -449,7 +586,12 @@ const Accounts: React.FC = () => {
                 variant="contained"
                 startIcon={<AddIcon />}
                 onClick={() => setConnectDialogOpen(true)}
-                sx={{ px: 3 }}
+                sx={{ 
+                  px: 3, 
+                  borderRadius: 1,
+                  textTransform: 'none',
+                  boxShadow: '0 1px 3px rgba(0,0,0,0.1)'
+                }}
               >
                 Connect Account
               </Button>
@@ -461,9 +603,14 @@ const Accounts: React.FC = () => {
         {accounts.length > 0 && (
           <Box sx={{ display: 'flex', flexDirection: { xs: 'column', sm: 'row' }, gap: 3, mb: 4 }}>
             <Box sx={{ flex: 1 }}>
-              <Card>
+              <Card sx={{ 
+                borderRadius: 1, 
+                border: '1px solid', 
+                borderColor: 'divider',
+                boxShadow: '0 1px 3px rgba(0,0,0,0.05)'
+              }}>
                 <CardContent sx={{ textAlign: 'center', p: 3 }}>
-                  <PeopleIcon sx={{ fontSize: 40, color: 'primary.main', mb: 1 }} />
+                  <PeopleIcon sx={{ fontSize: 36, color: 'primary.main', mb: 1 }} />
                   <Typography variant="h4" fontWeight={600} color="primary.main">
                     {accounts.length}
                   </Typography>
@@ -474,9 +621,14 @@ const Accounts: React.FC = () => {
               </Card>
             </Box>
             <Box sx={{ flex: 1 }}>
-              <Card>
+              <Card sx={{ 
+                borderRadius: 1, 
+                border: '1px solid', 
+                borderColor: 'divider',
+                boxShadow: '0 1px 3px rgba(0,0,0,0.05)'
+              }}>
                 <CardContent sx={{ textAlign: 'center', p: 3 }}>
-                  <CheckCircleIcon sx={{ fontSize: 40, color: 'success.main', mb: 1 }} />
+                  <CheckCircleIcon sx={{ fontSize: 36, color: 'success.main', mb: 1 }} />
                   <Typography variant="h4" fontWeight={600} color="success.main">
                     {accounts.filter(acc => acc.isActive).length}
                   </Typography>
@@ -487,9 +639,14 @@ const Accounts: React.FC = () => {
               </Card>
             </Box>
             <Box sx={{ flex: 1 }}>
-              <Card>
+              <Card sx={{ 
+                borderRadius: 1, 
+                border: '1px solid', 
+                borderColor: 'divider',
+                boxShadow: '0 1px 3px rgba(0,0,0,0.05)'
+              }}>
                 <CardContent sx={{ textAlign: 'center', p: 3 }}>
-                  <TrendingUpIcon sx={{ fontSize: 40, color: 'secondary.main', mb: 1 }} />
+                  <TrendingUpIcon sx={{ fontSize: 36, color: 'secondary.main', mb: 1 }} />
                   <Typography variant="h4" fontWeight={600} color="secondary.main">
                     {formatNumber(accounts.reduce((sum, acc) => sum + acc.followersCount, 0))}
                   </Typography>
@@ -500,9 +657,14 @@ const Accounts: React.FC = () => {
               </Card>
             </Box>
             <Box sx={{ flex: 1 }}>
-              <Card>
+              <Card sx={{ 
+                borderRadius: 1, 
+                border: '1px solid', 
+                borderColor: 'divider',
+                boxShadow: '0 1px 3px rgba(0,0,0,0.05)'
+              }}>
                 <CardContent sx={{ textAlign: 'center', p: 3 }}>
-                  <InstagramIcon sx={{ fontSize: 40, color: 'error.main', mb: 1 }} />
+                  <InstagramIcon sx={{ fontSize: 36, color: 'error.main', mb: 1 }} />
                   <Typography variant="h4" fontWeight={600} color="error.main">
                     {accounts.filter(acc => acc.authStatus === 'valid').length}
                   </Typography>
@@ -534,19 +696,42 @@ const Accounts: React.FC = () => {
       {!isLoading && accounts.length === 0 && !error ? (
         <EmptyState />
       ) : (
-        <Box sx={{ 
-          display: 'grid', 
-          gridTemplateColumns: { 
-            xs: '1fr', 
-            sm: 'repeat(2, 1fr)', 
-            lg: 'repeat(3, 1fr)' 
-          }, 
-          gap: 3 
+        <Card sx={{ 
+          borderRadius: 1, 
+          border: '1px solid', 
+          borderColor: 'divider',
+          boxShadow: '0 1px 3px rgba(0,0,0,0.05)',
+          overflow: 'hidden'
         }}>
+          {/* Table Header */}
+          <Box sx={{ 
+            display: 'flex', 
+            alignItems: 'center', 
+            justifyContent: 'space-between',
+            py: 2, 
+            px: 3, 
+            bgcolor: 'rgba(0,0,0,0.02)',
+            borderBottom: '1px solid',
+            borderColor: 'divider'
+          }}>
+            <Typography variant="subtitle2" fontWeight={600}>
+              Instagram Account
+            </Typography>
+            <Box sx={{ display: 'flex', gap: 12 }}>
+              <Typography variant="subtitle2" fontWeight={600}>
+                Status
+              </Typography>
+              <Typography variant="subtitle2" fontWeight={600} sx={{ width: '140px' }}>
+                Today's Activities
+              </Typography>
+            </Box>
+          </Box>
+          
+          {/* Accounts List */}
           {accounts.map((account) => (
-            <AccountCard key={account.id} account={account} />
+            <ListAccountCard key={account.id} account={account} />
           ))}
-        </Box>
+        </Card>
       )}
 
       {/* Connect Account Dialog */}
@@ -555,6 +740,12 @@ const Accounts: React.FC = () => {
         onClose={() => setConnectDialogOpen(false)}
         maxWidth="sm"
         fullWidth
+        PaperProps={{
+          sx: {
+            borderRadius: 1,
+            boxShadow: '0 4px 20px rgba(0,0,0,0.15)'
+          }
+        }}
       >
         <DialogTitle>
           <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
@@ -603,7 +794,15 @@ const Accounts: React.FC = () => {
           </Box>
         </DialogContent>
         <DialogActions sx={{ p: 3 }}>
-          <Button onClick={() => setConnectDialogOpen(false)} variant="contained">
+          <Button 
+            onClick={() => setConnectDialogOpen(false)} 
+            variant="contained"
+            sx={{
+              borderRadius: 1,
+              textTransform: 'none',
+              boxShadow: '0 1px 3px rgba(0,0,0,0.1)'
+            }}
+          >
             Got it
           </Button>
         </DialogActions>
@@ -615,6 +814,12 @@ const Accounts: React.FC = () => {
         onClose={() => setDeleteDialogOpen(false)}
         maxWidth="sm"
         fullWidth
+        PaperProps={{
+          sx: {
+            borderRadius: 1,
+            boxShadow: '0 4px 20px rgba(0,0,0,0.15)'
+          }
+        }}
       >
         <DialogTitle>
           <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
@@ -651,7 +856,7 @@ const Accounts: React.FC = () => {
                 src={accountToDelete.profilePicture}
                 sx={{ width: 64, height: 64, mx: 'auto', mb: 2 }}
               >
-                {accountToDelete.username.charAt(0).toUpperCase()}
+                {accountToDelete.username && accountToDelete.username.charAt(0)}
               </Avatar>
               <Typography variant="h6" sx={{ mb: 1 }}>
                 @{accountToDelete.username}
@@ -666,6 +871,11 @@ const Accounts: React.FC = () => {
           <Button 
             onClick={() => setDeleteDialogOpen(false)}
             variant="outlined"
+            sx={{
+              borderRadius: 1,
+              textTransform: 'none',
+              borderColor: 'divider'
+            }}
           >
             Cancel
           </Button>
@@ -675,6 +885,11 @@ const Accounts: React.FC = () => {
             color="error"
             disabled={isLoading}
             startIcon={isLoading ? <CircularProgress size={20} /> : <DeleteIcon />}
+            sx={{
+              borderRadius: 1,
+              textTransform: 'none',
+              boxShadow: '0 1px 3px rgba(0,0,0,0.1)'
+            }}
           >
             {isLoading ? 'Deleting...' : 'Delete Account'}
           </Button>

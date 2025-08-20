@@ -43,6 +43,12 @@ import {
   TableHead,
   TableRow,
   Tooltip,
+  Grid,
+  Container,
+  Badge,
+  Avatar,
+  LinearProgress,
+  Stack,
 } from '@mui/material';
 import {
   ArrowBack as ArrowBackIcon,
@@ -57,6 +63,13 @@ import {
   Settings as SettingsIcon,
   CloudUpload as CloudUploadIcon,
   FileDownload as FileDownloadIcon,
+  Campaign as CampaignIcon,
+  Launch as LaunchIcon,
+  Visibility as VisibilityIcon,
+  Check as CheckIcon,
+  Upload as UploadIcon,
+  Message as MessageIcon,
+  AccountCircle as AccountCircleIcon,
 } from '@mui/icons-material';
 import { formatDistanceToNow } from 'date-fns';
 import { useAppDispatch, useAppSelector } from '../hooks/redux';
@@ -670,6 +683,7 @@ travel_blogger`;
         }
       }}
     >
+      {/* Header with profile info */}
       <Box sx={{ display: 'flex', alignItems: 'center', mb: 2 }}>
         <Box sx={{ position: 'relative', mr: 2 }}>
           <Box
@@ -699,7 +713,7 @@ travel_blogger`;
             noWrap 
             sx={{ fontWeight: 600, fontSize: '1.1rem', mb: 0.5 }}
           >
-            {creator.fullName || 'No display name'}
+            {creator.fullName || creator.full_name || 'No display name'}
           </Typography>
           <Typography 
             variant="body2" 
@@ -709,18 +723,23 @@ travel_blogger`;
             @{creator.username}
           </Typography>
         </Box>
+        {/* Enrichment status badge */}
+        {creator.enriched_at && (
+          <Chip
+            label="Enriched"
+            size="small"
+            color="success"
+            variant="outlined"
+            sx={{ fontSize: '0.7rem' }}
+          />
+        )}
       </Box>
 
-      <Box sx={{ mb: 2 }}>
-        <Typography variant="caption" color="text.secondary" sx={{ fontSize: '0.75rem' }}>
-          {creator.accountType || 'Content Creator'}
-        </Typography>
-      </Box>
-
+      {/* Main metrics grid */}
       <Box sx={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 1.5, mb: 2 }}>
         <Box sx={{ textAlign: 'center', p: 1, bgcolor: 'grey.50', borderRadius: 1 }}>
           <Typography variant="h6" sx={{ color: 'primary.main', fontWeight: 'bold', fontSize: '1rem' }}>
-            {creator.followersCount?.toLocaleString() || 'N/A'}
+            {(creator.followersCount || creator.followers_count)?.toLocaleString() || 'N/A'}
           </Typography>
           <Typography variant="caption" color="text.secondary" sx={{ fontSize: '0.7rem' }}>
             Followers
@@ -728,7 +747,10 @@ travel_blogger`;
         </Box>
         <Box sx={{ textAlign: 'center', p: 1, bgcolor: 'grey.50', borderRadius: 1 }}>
           <Typography variant="h6" sx={{ color: 'success.main', fontWeight: 'bold', fontSize: '1rem' }}>
-            {creator.engagementRate ? `${creator.engagementRate}%` : 'N/A'}
+            {creator.engagement_rate ? 
+              `${(creator.engagement_rate * 100).toFixed(2)}%` : 
+              creator.engagementRate ? `${creator.engagementRate}%` : 'N/A'
+            }
           </Typography>
           <Typography variant="caption" color="text.secondary" sx={{ fontSize: '0.7rem' }}>
             Engagement
@@ -736,10 +758,11 @@ travel_blogger`;
         </Box>
       </Box>
 
-      <Box sx={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 1.5 }}>
+      {/* Engagement breakdown */}
+      <Box sx={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 1.5, mb: 2 }}>
         <Box sx={{ textAlign: 'center', p: 1, bgcolor: 'primary.50', borderRadius: 1 }}>
           <Typography variant="body2" sx={{ fontWeight: 600, fontSize: '0.85rem' }}>
-            {creator.averageLikes?.toLocaleString() || 'N/A'}
+            {(creator.avg_likes || creator.averageLikes)?.toLocaleString() || 'N/A'}
           </Typography>
           <Typography variant="caption" color="text.secondary" sx={{ fontSize: '0.7rem' }}>
             Avg Likes
@@ -747,11 +770,51 @@ travel_blogger`;
         </Box>
         <Box sx={{ textAlign: 'center', p: 1, bgcolor: 'secondary.50', borderRadius: 1 }}>
           <Typography variant="body2" sx={{ fontWeight: 600, fontSize: '0.85rem' }}>
-            {creator.averageComments?.toLocaleString() || 'N/A'}
+            {(creator.avg_comments || creator.averageComments)?.toLocaleString() || 'N/A'}
           </Typography>
           <Typography variant="caption" color="text.secondary" sx={{ fontSize: '0.7rem' }}>
             Avg Comments
           </Typography>
+        </Box>
+      </Box>
+
+      {/* Additional metrics (if available from enrichment) */}
+      {(creator.media_count || creator.posts_analyzed) && (
+        <Box sx={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 1.5, mb: 2 }}>
+          <Box sx={{ textAlign: 'center', p: 1, bgcolor: 'info.50', borderRadius: 1 }}>
+            <Typography variant="body2" sx={{ fontWeight: 600, fontSize: '0.85rem' }}>
+              {(creator.media_count || creator.mediaCount || 0).toLocaleString()}
+            </Typography>
+            <Typography variant="caption" color="text.secondary" sx={{ fontSize: '0.7rem' }}>
+              Total Posts
+            </Typography>
+          </Box>
+          <Box sx={{ textAlign: 'center', p: 1, bgcolor: 'warning.50', borderRadius: 1 }}>
+            <Typography variant="body2" sx={{ fontWeight: 600, fontSize: '0.85rem' }}>
+              {creator.posts_analyzed || creator.recentPostsCount || 12}
+            </Typography>
+            <Typography variant="caption" color="text.secondary" sx={{ fontSize: '0.7rem' }}>
+              Posts Analyzed
+            </Typography>
+          </Box>
+        </Box>
+      )}
+
+      {/* Data source and timestamp */}
+      <Box sx={{ mt: 2, pt: 2, borderTop: '1px solid #f0f0f0' }}>
+        <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+          <Chip
+            label={creator.source === 'facebook_graph_api' ? 'Live Data' : 'Cached'}
+            size="small"
+            color={creator.source === 'facebook_graph_api' ? 'success' : 'default'}
+            variant="outlined"
+            sx={{ fontSize: '0.65rem', height: '20px' }}
+          />
+          {creator.enriched_at && (
+            <Typography variant="caption" color="text.secondary" sx={{ fontSize: '0.65rem' }}>
+              {new Date(creator.enriched_at).toLocaleDateString()}
+            </Typography>
+          )}
         </Box>
       </Box>
     </Box>
@@ -1390,58 +1453,220 @@ travel_blogger`;
   }
 
   return (
-    <Box>
-      {/* Campaign Name Field - Above everything */}
-      <Box sx={{ mb: 3 }}>
-        <TextField
-          fullWidth
-          label="Campaign Name"
-          value={formData.name}
-          onChange={(e) => setFormData(prev => ({ ...prev, name: e.target.value }))}
-          placeholder="Enter a descriptive name for your campaign"
-          required
-          disabled={viewMode}
-          sx={{
-            '& .MuiInputBase-root': {
-              fontSize: '1.1rem',
-            }
-          }}
-        />
-      </Box>
-
-      {/* Header */}
-      <Box sx={{ mb: 3, display: 'flex', alignItems: 'center', gap: 2 }}>
+    <Container maxWidth="xl" sx={{ py: 3 }}>
+      {/* Modern Header Section */}
+      <Box sx={{ mb: 4 }}>
+        {/* Navigation Breadcrumb */}
         {!viewMode && (
-          <IconButton onClick={() => navigate('/campaigns')}>
-            <ArrowBackIcon />
-          </IconButton>
+          <Box sx={{ display: 'flex', alignItems: 'center', mb: 2 }}>
+            <Button
+              startIcon={<ArrowBackIcon />}
+              onClick={() => navigate('/campaigns')}
+              variant="outlined"
+              size="small"
+              sx={{ 
+                borderRadius: '8px',
+                textTransform: 'none',
+                color: 'text.secondary',
+                borderColor: 'divider'
+              }}
+            >
+              Back to Campaigns
+            </Button>
+          </Box>
         )}
-        <Typography variant="h4">
-          {viewMode 
-            ? 'Campaign Details' 
-            : (id && id !== 'create' ? 'Edit Campaign' : 'Create New Campaign')
-          }
-        </Typography>
+
+        {/* Hero Header */}
+        <Paper 
+          elevation={0}
+          sx={{ 
+            background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
+            color: 'white',
+            p: 4,
+            borderRadius: 3,
+            position: 'relative',
+            overflow: 'hidden'
+          }}
+        >
+          {/* Background Pattern */}
+          <Box
+            sx={{
+              position: 'absolute',
+              top: 0,
+              right: 0,
+              width: '40%',
+              height: '100%',
+              opacity: 0.1,
+              backgroundImage: `url("data:image/svg+xml,%3Csvg width='60' height='60' viewBox='0 0 60 60' xmlns='http://www.w3.org/2000/svg'%3E%3Cg fill='none' fill-rule='evenodd'%3E%3Cg fill='%23ffffff' fill-opacity='0.1'%3E%3Ccircle cx='30' cy='30' r='4'/%3E%3C/g%3E%3C/g%3E%3C/svg%3E")`,
+            }}
+          />
+          
+          <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 3 }}>
+            <Box sx={{ flex: '1 1 auto', minWidth: 300 }}>
+              <Box sx={{ display: 'flex', alignItems: 'center', mb: 2 }}>
+                <Avatar
+                  sx={{ 
+                    bgcolor: 'rgba(255, 255, 255, 0.2)', 
+                    mr: 2,
+                    width: 56,
+                    height: 56
+                  }}
+                >
+                  <CampaignIcon sx={{ fontSize: 28 }} />
+                </Avatar>
+                <Box>
+                  <Typography variant="h3" sx={{ fontWeight: 700, mb: 0.5 }}>
+                    {viewMode 
+                      ? 'Campaign Overview' 
+                      : (id && id !== 'create' ? 'Edit Campaign' : 'Create New Campaign')
+                    }
+                  </Typography>
+                  <Typography variant="h6" sx={{ opacity: 0.9, fontWeight: 400 }}>
+                    {viewMode 
+                      ? 'Monitor and analyze your outreach performance'
+                      : 'Build automated Instagram outreach campaigns with powerful targeting'
+                    }
+                  </Typography>
+                </Box>
+              </Box>
+            </Box>
+            
+            {/* Campaign Name Field - Integrated into Header */}
+            {!viewMode && (
+              <Box sx={{ minWidth: 300 }}>
+                <TextField
+                  fullWidth
+                  label="Campaign Name"
+                  value={formData.name}
+                  onChange={(e) => setFormData(prev => ({ ...prev, name: e.target.value }))}
+                  placeholder="Enter campaign name..."
+                  required
+                  variant="filled"
+                  sx={{
+                    '& .MuiFilledInput-root': {
+                      bgcolor: 'rgba(255, 255, 255, 0.15)',
+                      '&:hover': {
+                        bgcolor: 'rgba(255, 255, 255, 0.2)',
+                      },
+                      '&.Mui-focused': {
+                        bgcolor: 'rgba(255, 255, 255, 0.25)',
+                      }
+                    },
+                    '& .MuiInputLabel-root': {
+                      color: 'rgba(255, 255, 255, 0.8)'
+                    },
+                    '& .MuiFilledInput-input': {
+                      color: 'white'
+                    }
+                  }}
+                />
+              </Box>
+            )}
+          </Box>
+        </Paper>
       </Box>
 
       {error && (
-        <Alert severity="error" sx={{ mb: 3 }}>
+        <Alert 
+          severity="error" 
+          sx={{ 
+            mb: 3,
+            borderRadius: 2,
+            '& .MuiAlert-icon': {
+              fontSize: '1.25rem'
+            }
+          }}
+        >
           {error}
         </Alert>
       )}
 
-      {/* Stepper - Always Show */}
-      <Card sx={{ mb: 3 }}>
-        <CardContent>
-          <Stepper activeStep={activeStep} alternativeLabel>
-            {steps.map((label) => (
-              <Step key={label}>
-                <StepLabel>{label}</StepLabel>
+      {/* Modern Progress Stepper */}
+      <Paper 
+        elevation={0} 
+        sx={{ 
+          mb: 4, 
+          border: '1px solid',
+          borderColor: 'divider',
+          borderRadius: 2,
+          overflow: 'hidden'
+        }}
+      >
+        <Box sx={{ p: 3, pb: 2 }}>
+          <Typography variant="h6" sx={{ mb: 3, fontWeight: 600 }}>
+            Campaign Setup Progress
+          </Typography>
+          
+          <Stepper 
+            activeStep={activeStep} 
+            sx={{
+              '& .MuiStepLabel-root': {
+                flexDirection: 'column',
+                gap: 1
+              },
+              '& .MuiStepConnector-root': {
+                top: 20,
+                left: 'calc(-50% + 20px)',
+                right: 'calc(50% + 20px)',
+              },
+              '& .MuiStepConnector-line': {
+                borderTopWidth: 3,
+                borderRadius: 1,
+              },
+              '& .MuiStep-root': {
+                px: 1
+              }
+            }}
+          >
+            {steps.map((label, index) => (
+              <Step 
+                key={label}
+                sx={{
+                  '& .MuiStepLabel-label': {
+                    fontSize: '0.875rem',
+                    fontWeight: 500,
+                    mt: 1
+                  },
+                  '& .MuiStepIcon-root': {
+                    width: 40,
+                    height: 40,
+                    '&.Mui-active': {
+                      color: 'primary.main'
+                    },
+                    '&.Mui-completed': {
+                      color: 'success.main'
+                    }
+                  }
+                }}
+              >
+                <StepLabel>
+                  <Box sx={{ textAlign: 'center' }}>
+                    <Typography variant="subtitle2" sx={{ fontWeight: 600 }}>
+                      {label}
+                    </Typography>
+                  </Box>
+                </StepLabel>
               </Step>
             ))}
           </Stepper>
-        </CardContent>
-      </Card>
+
+          {/* Progress Bar */}
+          <Box sx={{ mt: 3 }}>
+            <LinearProgress 
+              variant="determinate" 
+              value={(activeStep / (steps.length - 1)) * 100}
+              sx={{
+                height: 4,
+                borderRadius: 2,
+                bgcolor: 'grey.200',
+                '& .MuiLinearProgress-bar': {
+                  borderRadius: 2
+                }
+              }}
+            />
+          </Box>
+        </Box>
+      </Paper>
 
       {/* Show Creator Cards only on step 0 when processing is complete, otherwise show stepper content */}
       {activeStep === 0 && formData.csvUserDetails && formData.csvUserDetails.length > 0 ? (
@@ -1632,7 +1857,7 @@ travel_blogger`;
 
       {/* Message Edit Dialog */}
       <MessageEditDialog />
-    </Box>
+    </Container>
   );
 };
 
