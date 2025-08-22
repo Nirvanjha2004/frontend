@@ -43,7 +43,6 @@ import {
   TableHead,
   TableRow,
   Tooltip,
-  Grid,
   Container,
   Badge,
   Avatar,
@@ -88,12 +87,11 @@ const steps = [
 interface CampaignFormData {
   name: string;
   description: string;
-  // hashtags: string[]; // Commented out - replaced with CSV upload
   csvFile: File | null;
   csvUsernames: string[];
   csvPreview: string[];
-  csvUserDetails?: any[]; // Store fetched user details from API
-  selectedCreators?: any[]; // Store selected creators for the campaign
+  csvUserDetails?: any[];
+  selectedCreators?: any[];
   filters: {
     followerRange: { min: number; max: number };
     engagementRate: { min: number; max: number };
@@ -132,25 +130,26 @@ interface CampaignFormData {
 interface CreateCampaignProps {
   viewMode?: boolean;
   campaignId?: string;
+  campaignData?: any;
   onClose?: () => void;
 }
 
 const CreateCampaign: React.FC<CreateCampaignProps> = ({ 
   viewMode = false, 
   campaignId,
+  campaignData: propCampaignData,
   onClose 
 }) => {
   const navigate = useNavigate();
   const { id } = useParams();
   const dispatch = useAppDispatch();
-  const { currentCampaign, isLoading, error } = useAppSelector((state) => state.campaigns);
+  const { error } = useAppSelector((state) => state.campaigns);
   const { user } = useAppSelector((state) => state.auth);
 
   const [activeStep, setActiveStep] = useState(0);
   const [formData, setFormData] = useState<CampaignFormData>({
     name: '',
     description: '',
-    // hashtags: [], // Commented out - replaced with CSV upload
     csvFile: null,
     csvUsernames: [],
     csvPreview: [],
@@ -175,7 +174,7 @@ const CreateCampaign: React.FC<CreateCampaignProps> = ({
         stepNumber: 2,
         messageType: 'message',
         content: 'Hi! I love your content and would love to collaborate. Check out our brand!',
-        delayHours: 72, // 3 days default for better compliance
+        delayHours: 72,
         isActive: true,
       },
     ],
@@ -195,7 +194,6 @@ const CreateCampaign: React.FC<CreateCampaignProps> = ({
     },
   });
 
-  // const [hashtagInput, setHashtagInput] = useState(''); // Commented out - replaced with CSV upload
   const [csvUploadError, setCsvUploadError] = useState<string>('');
   const [isProcessingCsv, setIsProcessingCsv] = useState(false);
   const [messageDialogOpen, setMessageDialogOpen] = useState(false);
@@ -204,6 +202,8 @@ const CreateCampaign: React.FC<CreateCampaignProps> = ({
   const [searchQuery, setSearchQuery] = useState('');
   const [instagramAccountsLoading, setInstagramAccountsLoading] = useState(false);
   const [instagramAccountsError, setInstagramAccountsError] = useState<string>('');
+  const [localCampaignData, setLocalCampaignData] = useState<any>(null);
+  const [loading, setLoading] = useState(viewMode && !propCampaignData);
 
   // Restore selected creators when activeStep changes back to 0
   useEffect(() => {
@@ -213,35 +213,80 @@ const CreateCampaign: React.FC<CreateCampaignProps> = ({
     }
   }, [activeStep, formData.selectedCreators]);
 
+  // Remove the old useEffect that fetches campaign data
+  // Replace with this new one that handles both prop data and API fetching
   useEffect(() => {
-    if (id && id !== 'create') {
-      dispatch(fetchCampaign(id));
-    }
-  }, [dispatch, id]);
+    const initializeCampaignData = async () => {
+      if (viewMode) {
+        // In view mode, use prop data if available, otherwise fetch
+        if (propCampaignData) {
+          setLocalCampaignData(propCampaignData);
+          setLoading(false);
+        } else if (campaignId) {
+          try {
+            setLoading(true);
+            const response = await apiCall(`/api/campaigns/${campaignId}`);
+            const data = await response.json();
+            
+            if (data.success && data.data.campaign) {
+              setLocalCampaignData(data.data.campaign);
+            }
+          } catch (error) {
+            console.error('Error fetching campaign data:', error);
+          } finally {
+            setLoading(false);
+          }
+        }
+      } else if (id && id !== 'create') {
+        // Edit mode - use Redux
+        dispatch(fetchCampaign(id));
+      }
+    };
 
+    initializeCampaignData();
+  }, [viewMode, propCampaignData, campaignId, id, dispatch]);
+
+  // Map API response to form data when campaign data is available
   useEffect(() => {
-    if (currentCampaign && id && id !== 'create') {
-      // Set default values for optional properties
-      setFormData({
-        name: currentCampaign.name,
-        description: currentCampaign.description || '',
-        // hashtags: currentCampaign.hashtags, // Commented out - replaced with CSV upload
-        csvFile: null,
-        csvUsernames: [],
-        csvPreview: [],
-        csvUserDetails: [],
+    if (localCampaignData && viewMode) {
+      const campaign = localCampaignData;
+      
+      // Map the API response structure to form data
+      setFormData(prev => ({
+        ...prev,
+        name: campaign.name || '',
+        description: campaign.description || '',
+        csvUsernames: campaign.selectedInfluencers?.map((inf: any) => inf.username) || [],
+        csvUserDetails: campaign.selectedInfluencers || [],
+        selectedCreators: campaign.selectedInfluencers || [],
         filters: {
-          ...currentCampaign.filters,
-          location: currentCampaign.filters.location || [],
-          categories: currentCampaign.filters.categories || [],
+          followerRange: campaign.filters?.followerRange || { min: 1000, max: 100000 },
+          engagementRate: campaign.filters?.engagementRate || { min: 1, max: 10 },
+          location: campaign.filters?.location || [],
+          categories: campaign.filters?.categories || [],
+          verifiedOnly: campaign.filters?.verifiedOnly || false,
+          privateAccountsOnly: campaign.filters?.privateAccountsOnly || false,
         },
-        messageSequence: currentCampaign.messageSequence,
-        senderAccounts: currentCampaign.senderAccounts,
-        operationalHours: currentCampaign.operationalHours,
-        settings: currentCampaign.settings,
-      });
+        messageSequence: campaign.messageSequence || prev.messageSequence,
+        senderAccounts: campaign.senderAccounts || [],
+        operationalHours: campaign.operationalHours || prev.operationalHours,
+        settings: {
+          maxDailyFollows: campaign.settings?.maxDailyFollows || campaign.daily_outreach_limit || 50,
+          maxDailyMessages: campaign.settings?.maxDailyMessages || 20,
+          followUpDelay: campaign.settings?.followUpDelay || 48,
+          randomizeDelay: campaign.settings?.randomizeDelay || true,
+          delayVariation: campaign.settings?.delayVariation || 30,
+        },
+      }));
+
+      // Set selected creators for the UI
+      if (campaign.selectedInfluencers) {
+        const selectedUsernames = new Set(campaign.selectedInfluencers.map((inf: any) => inf.username));
+        //@ts-ignore
+        setSelectedCreators(selectedUsernames);
+      }
     }
-  }, [currentCampaign, id]);
+  }, [localCampaignData, viewMode]);
 
   // Fetch Instagram accounts for workspace
   const fetchInstagramAccounts = async () => {
@@ -277,6 +322,8 @@ const CreateCampaign: React.FC<CreateCampaignProps> = ({
     }
   };
 
+  console.log('formdata', formData)
+
   useEffect(() => {
     // Fetch Instagram accounts when user is available
     if (user?.email) {
@@ -306,23 +353,6 @@ const CreateCampaign: React.FC<CreateCampaignProps> = ({
     // Advance to next step (Message Sequence)
     setActiveStep(1);
   };
-
-  // const handleAddHashtag = () => {
-  //   if (hashtagInput.trim() && !formData.hashtags.includes(hashtagInput.trim())) {
-  //     setFormData(prev => ({
-  //       ...prev,
-  //       hashtags: [...prev.hashtags, hashtagInput.trim()]
-  //     }));
-  //     setHashtagInput('');
-  //   }
-  // };
-
-  // const handleRemoveHashtag = (hashtag: string) => {
-  //   setFormData(prev => ({
-  //     ...prev,
-  //     hashtags: prev.hashtags.filter(h => h !== hashtag)
-  //   }));
-  // };
 
   // CSV Upload Handlers
   const handleCsvUpload = async (event: React.ChangeEvent<HTMLInputElement>) => {
@@ -759,50 +789,91 @@ travel_blogger`;
 
   const renderBasicInformationAndCreators = () => (
     <Box>
-      {viewMode && (
+      {viewMode && localCampaignData && (
         <Card sx={{ mb: 3, bgcolor: 'primary.50' }}>
           <CardContent>
             <Typography variant="h6" gutterBottom sx={{ display: 'flex', alignItems: 'center' }}>
               <InstagramIcon sx={{ mr: 1, color: 'primary.main' }} />
               Campaign Overview
             </Typography>
-            <Box sx={{ display: 'flex', gap: 2, justifyContent: 'space-between', flexWrap: 'wrap' }}>
-              <Box sx={{ flex: 1, minWidth: 200, textAlign: 'center' }}>
+            
+            {/* Replace Grid with Box layout */}
+            <Box
+              sx={{
+                display: 'grid',
+                gridTemplateColumns: { 
+                  xs: '1fr',
+                  sm: '1fr 1fr',
+                  md: 'repeat(4, 1fr)'
+                },
+                gap: 3,
+                mb: 3
+              }}
+            >
+              <Box sx={{ textAlign: 'center' }}>
                 <Typography variant="h4" color="primary.main" sx={{ fontWeight: 'bold' }}>
-                  {formData.csvUserDetails?.length || 0}
+                  {localCampaignData.discoveredInfluencers?.length || 0}
                 </Typography>
                 <Typography variant="body2" color="text.secondary">
                   Total Influencers
                 </Typography>
               </Box>
-              <Box sx={{ flex: 1, minWidth: 200, textAlign: 'center' }}>
+              
+              <Box sx={{ textAlign: 'center' }}>
                 <Typography variant="h4" color="success.main" sx={{ fontWeight: 'bold' }}>
-                  {formData.csvUserDetails?.filter((i: any) => i.overallStatus === 'completed').length || 0}
+                  {localCampaignData.statistics?.creators_discovered || 0}
                 </Typography>
                 <Typography variant="body2" color="text.secondary">
-                  Completed
+                  Discovered
                 </Typography>
               </Box>
-              <Box sx={{ flex: 1, minWidth: 200, textAlign: 'center' }}>
-                <Typography variant="h4" color="primary.main" sx={{ fontWeight: 'bold' }}>
-                  {formData.csvUserDetails?.filter((i: any) => i.overallStatus === 'active').length || 0}
+              
+              <Box sx={{ textAlign: 'center' }}>
+                <Typography variant="h4" color="info.main" sx={{ fontWeight: 'bold' }}>
+                  {localCampaignData.statistics?.follows_sent || 0}
                 </Typography>
                 <Typography variant="body2" color="text.secondary">
-                  Active
+                  Follows Sent
                 </Typography>
               </Box>
-              <Box sx={{ flex: 1, minWidth: 200, textAlign: 'center' }}>
+              
+              <Box sx={{ textAlign: 'center' }}>
                 <Typography variant="h4" color="warning.main" sx={{ fontWeight: 'bold' }}>
-                  {formData.csvUserDetails?.filter((i: any) => i.overallStatus === 'pending' || i.overallStatus === 'scheduled').length || 0}
+                  {localCampaignData.daily_outreach_limit || 50}
                 </Typography>
                 <Typography variant="body2" color="text.secondary">
-                  Pending/Scheduled
+                  Daily Limit
+                </Typography>
+              </Box>
+            </Box>
+
+            {/* Campaign Status */}
+            <Box sx={{ mt: 3, display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 2 }}>
+              <Box>
+                <Chip
+                  label={localCampaignData.status || 'active'}
+                  color={
+                    localCampaignData.status === 'active' ? 'success' :
+                    localCampaignData.status === 'paused' ? 'warning' :
+                    localCampaignData.status === 'completed' ? 'info' : 'default'
+                  }
+                  variant="outlined"
+                  sx={{ mr: 2 }}
+                />
+                <Typography variant="body2" color="text.secondary" component="span">
+                  Created: {new Date(localCampaignData.createdAt).toLocaleDateString()}
+                </Typography>
+              </Box>
+              <Box>
+                <Typography variant="body2" color="text.secondary">
+                  Last Updated: {new Date(localCampaignData.updatedAt).toLocaleDateString()}
                 </Typography>
               </Box>
             </Box>
           </CardContent>
         </Card>
       )}
+      
       <Card sx={{ mb: 3 }}>
         <CardContent>
           <Typography variant="h6" gutterBottom sx={{ display: 'flex', alignItems: 'center' }}>
@@ -814,7 +885,7 @@ travel_blogger`;
             // View Mode: Show influencers table
             <Box>
               <Typography variant="body2" color="text.secondary" sx={{ mb: 3 }}>
-                List of influencers in this campaign with their current status and assigned accounts.
+                List of influencers in this campaign with their current status.
               </Typography>
               
               {formData.csvUserDetails && formData.csvUserDetails.length > 0 ? (
@@ -823,10 +894,10 @@ travel_blogger`;
                     <TableHead>
                       <TableRow>
                         <TableCell>Username</TableCell>
+                        <TableCell>Full Name</TableCell>
+                        <TableCell>Followers</TableCell>
+                        <TableCell>Engagement Rate</TableCell>
                         <TableCell>Status</TableCell>
-                        <TableCell>Assigned Account</TableCell>
-                        <TableCell>Last Activity</TableCell>
-                        <TableCell>Actions Progress</TableCell>
                       </TableRow>
                     </TableHead>
                     <TableBody>
@@ -855,17 +926,28 @@ travel_blogger`;
                               >
                                 {(influencer.username || '?').charAt(0).toUpperCase()}
                               </Box>
-                              <Box>
-                                <Typography variant="subtitle2" sx={{ fontWeight: 600 }}>
-                                  @{influencer.username}
-                                </Typography>
-                                {influencer.fullName && (
-                                  <Typography variant="body2" color="text.secondary">
-                                    {influencer.fullName}
-                                  </Typography>
-                                )}
-                              </Box>
+                              <Typography variant="subtitle2" sx={{ fontWeight: 600 }}>
+                                @{influencer.username}
+                              </Typography>
                             </Box>
+                          </TableCell>
+                          <TableCell>
+                            <Typography variant="body2">
+                              {influencer.fullName || influencer.full_name || 'N/A'}
+                            </Typography>
+                          </TableCell>
+                          <TableCell>
+                            <Typography variant="body2">
+                              {(influencer.followersCount || influencer.followers_count)?.toLocaleString() || 'N/A'}
+                            </Typography>
+                          </TableCell>
+                          <TableCell>
+                            <Typography variant="body2">
+                              {influencer.engagement_rate ? 
+                                `${(influencer.engagement_rate * 100).toFixed(2)}%` : 
+                                influencer.engagementRate ? `${influencer.engagementRate}%` : 'N/A'
+                              }
+                            </Typography>
                           </TableCell>
                           <TableCell>
                             <Chip
@@ -873,81 +955,11 @@ travel_blogger`;
                               color={
                                 influencer.overallStatus === 'completed' ? 'success' :
                                 influencer.overallStatus === 'active' ? 'primary' :
-                                influencer.overallStatus === 'failed' ? 'error' :
-                                influencer.overallStatus === 'scheduled' ? 'info' : 'default'
+                                influencer.overallStatus === 'failed' ? 'error' : 'default'
                               }
                               size="small"
                               variant="outlined"
                             />
-                          </TableCell>
-                          <TableCell>
-                            {influencer.assignedAccount ? (
-                              <Box sx={{ display: 'flex', alignItems: 'center' }}>
-                                <Box
-                                  sx={{
-                                    width: 24,
-                                    height: 24,
-                                    borderRadius: '50%',
-                                    bgcolor: 'primary.main',
-                                    color: 'white',
-                                    display: 'flex',
-                                    alignItems: 'center',
-                                    justifyContent: 'center',
-                                    fontSize: '12px',
-                                    mr: 1
-                                  }}
-                                >
-                                  {influencer.assignedAccount.username.charAt(0).toUpperCase()}
-                                </Box>
-                                <Typography variant="body2">
-                                  @{influencer.assignedAccount.username}
-                                </Typography>
-                              </Box>
-                            ) : (
-                              <Typography variant="body2" color="text.secondary">
-                                Not assigned
-                              </Typography>
-                            )}
-                          </TableCell>
-                          <TableCell>
-                            {influencer.lastActivity ? (
-                              <Tooltip title={new Date(influencer.lastActivity).toLocaleString()}>
-                                <Typography variant="body2">
-                                  {formatDistanceToNow(new Date(influencer.lastActivity), { addSuffix: true })}
-                                </Typography>
-                              </Tooltip>
-                            ) : (
-                              <Typography variant="body2" color="text.secondary">
-                                No activity
-                              </Typography>
-                            )}
-                          </TableCell>
-                          <TableCell>
-                            {influencer.stats ? (
-                              <Box>
-                                <Box sx={{ display: 'flex', gap: 0.5, mb: 0.5 }}>
-                                  {influencer.stats.completed > 0 && (
-                                    <Chip label={`${influencer.stats.completed} ✓`} size="small" color="success" />
-                                  )}
-                                  {influencer.stats.failed > 0 && (
-                                    <Chip label={`${influencer.stats.failed} ✗`} size="small" color="error" />
-                                  )}
-                                  {influencer.stats.pending > 0 && (
-                                    <Chip label={`${influencer.stats.pending} ⏳`} size="small" color="warning" />
-                                  )}
-                                  {influencer.stats.scheduled > 0 && (
-                                    <Chip label={`${influencer.stats.scheduled} 📅`} size="small" color="info" />
-                                  )}
-                                </Box>
-                                <Typography variant="caption" color="text.secondary">
-                                  {influencer.stats.total} total actions
-                                </Typography>
-                              </Box>
-                            ) : (
-                              <Typography variant="body2" color="text.secondary">
-                                No actions
-                              </Typography>
-                            )}
                           </TableCell>
                         </TableRow>
                       ))}
@@ -1066,9 +1078,15 @@ travel_blogger`;
     <Card>
       <CardContent>
         <Typography variant="h6" gutterBottom sx={{ display: 'flex', alignItems: 'center' }}>
-          <InstagramIcon sx={{ mr: 1 }} />
+          <MessageIcon sx={{ mr: 1 }} />
           Message Sequence
         </Typography>
+        
+        {viewMode && localCampaignData && (
+          <Alert severity="info" sx={{ mb: 2 }}>
+            This campaign has {formData.messageSequence.length} automated steps configured.
+          </Alert>
+        )}
         
         <List>
           {formData.messageSequence.map((step, index) => (
@@ -1099,38 +1117,42 @@ travel_blogger`;
                 }
                 secondary={step.content || `${step.messageType} action`}
               />
-              <ListItemSecondaryAction>
-                <Box sx={{ display: 'flex', gap: 1 }}>
-                  <IconButton
-                    edge="end"
-                    onClick={() => handleEditMessageStep(step.stepNumber)}
-                    size="small"
-                  >
-                    <EditIcon />
-                  </IconButton>
-                  <IconButton
-                    edge="end"
-                    onClick={() => handleRemoveMessageStep(step.stepNumber)}
-                    disabled={formData.messageSequence.length <= 1}
-                    size="small"
-                  >
-                    <DeleteIcon />
-                  </IconButton>
-                </Box>
-              </ListItemSecondaryAction>
+              {!viewMode && (
+                <ListItemSecondaryAction>
+                  <Box sx={{ display: 'flex', gap: 1 }}>
+                    <IconButton
+                      edge="end"
+                      onClick={() => handleEditMessageStep(step.stepNumber)}
+                      size="small"
+                    >
+                      <EditIcon />
+                    </IconButton>
+                    <IconButton
+                      edge="end"
+                      onClick={() => handleRemoveMessageStep(step.stepNumber)}
+                      disabled={formData.messageSequence.length <= 1}
+                      size="small"
+                    >
+                      <DeleteIcon />
+                    </IconButton>
+                  </Box>
+                </ListItemSecondaryAction>
+              )}
             </ListItem>
           ))}
         </List>
         
-        <Button
-          startIcon={<AddIcon />}
-          onClick={handleAddMessageStep}
-          variant="outlined"
-          fullWidth
-          sx={{ mt: 2 }}
-        >
-          Add Message Step
-        </Button>
+        {!viewMode && (
+          <Button
+            startIcon={<AddIcon />}
+            onClick={handleAddMessageStep}
+            variant="outlined"
+            fullWidth
+            sx={{ mt: 2 }}
+          >
+            Add Message Step
+          </Button>
+        )}
         
         <Alert severity="info" sx={{ mt: 2 }}>
           The message sequence defines the automated actions that will be performed for each discovered influencer.
@@ -1427,11 +1449,16 @@ travel_blogger`;
     );
   };
 
-  if (isLoading) {
+  if (loading) {
     return (
-      <Box display="flex" justifyContent="center" alignItems="center" minHeight="400px">
-        <CircularProgress />
-      </Box>
+      <Container maxWidth="xl" sx={{ py: 3 }}>
+        <Box display="flex" justifyContent="center" alignItems="center" minHeight="400px">
+          <CircularProgress size={40} />
+          <Typography variant="body1" sx={{ ml: 2 }}>
+            Loading campaign data...
+          </Typography>
+        </Box>
+      </Container>
     );
   }
 
@@ -1578,7 +1605,8 @@ travel_blogger`;
         <Box sx={{ p: 3, pb: 2 }}>
           <Typography variant="h6" sx={{ mb: 3, fontWeight: 600 }}>
             Campaign Setup Progress
-          </Typography>
+          </Typography
+          >
           
           <Stepper 
             activeStep={activeStep} 
@@ -1828,14 +1856,14 @@ travel_blogger`;
                         <Button
                           onClick={handleSubmit}
                           variant="outlined"
-                          disabled={isLoading}
+                          disabled={loading}
                         >
                           Save as Draft
                         </Button>
                         <Button
                           onClick={handleSubmit}
                           variant="contained"
-                          disabled={isLoading}
+                          disabled={loading}
                         >
                           {id && id !== 'create' ? 'Update Campaign' : 'Create Campaign'}
                         </Button>
