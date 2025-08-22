@@ -41,9 +41,7 @@ import {
   Instagram as InstagramIcon,
 } from '@mui/icons-material';
 import { useAppSelector } from '../hooks/redux';
-import axios from 'axios';
-
-const API_BASE_URL = process.env.REACT_APP_API_URL || 'http://localhost:5000/api';
+import api from '../services/api';
 
 interface Participant {
   userId: string;
@@ -111,7 +109,7 @@ interface Message {
 const Unibox: React.FC = () => {
   const theme = useTheme();
   const user = useAppSelector((state) => state.auth?.user);
-  const userEmail = user?.email || 'test@example.com';
+  const userEmail = user?.email;
   
   const [conversations, setConversations] = useState<Conversation[]>([]);
   const [selectedConversation, setSelectedConversation] = useState<Conversation | null>(null);
@@ -123,12 +121,16 @@ const Unibox: React.FC = () => {
   const [isSending, setIsSending] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [lastSync, setLastSync] = useState<Date | null>(null);
+  const [shouldScrollToBottom, setShouldScrollToBottom] = useState(false);
   
   const messagesEndRef = useRef<HTMLDivElement>(null);
+  const messagesContainerRef = useRef<HTMLDivElement>(null);
   const [anchorEl, setAnchorEl] = useState<null | HTMLElement>(null);
 
   useEffect(() => {
-    fetchConversations();
+    if (userEmail) {
+      fetchConversations();
+    }
   }, [userEmail]);
 
   useEffect(() => {
@@ -138,11 +140,50 @@ const Unibox: React.FC = () => {
   }, [selectedConversation]);
 
   useEffect(() => {
-    scrollToBottom();
-  }, [messages]);
+    if (shouldScrollToBottom && messages.length > 0) {
+      scrollToBottom();
+      setShouldScrollToBottom(false);
+    }
+  }, [messages, shouldScrollToBottom]);
+
+  if (!user || !userEmail) {
+    return (
+      <Container 
+        maxWidth={false} 
+        sx={{ 
+          height: '100vh', 
+          py: 2,
+          overflow: 'hidden'
+        }}
+      >
+        <Paper 
+          elevation={2} 
+          sx={{ 
+            height: '90vh', 
+            display: 'flex', 
+            alignItems: 'center', 
+            justifyContent: 'center', 
+            borderRadius: 2,
+            overflow: 'hidden'
+          }}
+        >
+          <Box sx={{ textAlign: 'center' }}>
+            <Typography variant="h6" color="text.secondary">
+              Please log in to view your conversations
+            </Typography>
+          </Box>
+        </Paper>
+      </Container>
+    );
+  }
 
   const scrollToBottom = () => {
-    messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+    if (messagesEndRef.current && messagesContainerRef.current) {
+      messagesEndRef.current.scrollIntoView({ 
+        behavior: 'smooth',
+        block: 'end'
+      });
+    }
   };
 
   const fetchConversations = async () => {
@@ -150,7 +191,7 @@ const Unibox: React.FC = () => {
       setIsLoading(true);
       setError(null);
       
-      const response = await axios.get(`${API_BASE_URL}/conversations`, {
+      const response = await api.get('/conversations', {
         params: { workspaceEmail: userEmail }
       });
 
@@ -172,7 +213,7 @@ const Unibox: React.FC = () => {
     try {
       setIsLoadingMessages(true);
       
-      const response = await axios.get(`${API_BASE_URL}/conversations/${conversationId}/messages`, {
+      const response = await api.get(`/conversations/${conversationId}/messages`, {
         params: { 
           limit: options?.limit || 50,
           skip: options?.skip || 0,
@@ -182,11 +223,12 @@ const Unibox: React.FC = () => {
 
       if (response.data.success) {
         if (options?.skip) {
-          // Prepend older messages
           setMessages(prev => [...response.data.data.messages, ...prev]);
         } else {
-          // Replace all messages
           setMessages(response.data.data.messages);
+          setTimeout(() => {
+            setShouldScrollToBottom(true);
+          }, 100);
         }
       } else {
         setError(response.data.message || 'Failed to fetch messages');
@@ -204,12 +246,12 @@ const Unibox: React.FC = () => {
       setIsLoading(true);
       setError(null);
       
-      const response = await axios.post(`${API_BASE_URL}/conversations/sync/workspace`, {
+      const response = await api.post('/conversations/sync/workspace', {
         workspaceEmail: userEmail
       });
 
       if (response.data.success) {
-        await fetchConversations(); // Refresh the list
+        await fetchConversations();
         setLastSync(new Date());
       } else {
         setError(response.data.message || 'Failed to sync conversations');
@@ -228,13 +270,12 @@ const Unibox: React.FC = () => {
     try {
       setIsSending(true);
       
-      const response = await axios.post(`${API_BASE_URL}/conversations/${selectedConversation.id}/messages`, {
+      const response = await api.post(`/conversations/${selectedConversation.id}/messages`, {
         message: newMessage.trim(),
         messageType: 'text'
       });
 
       if (response.data.success) {
-        // Add the sent message to the local state
         const sentMessage: Message = {
           id: response.data.data.messageId,
           messageId: response.data.data.messageId,
@@ -249,8 +290,8 @@ const Unibox: React.FC = () => {
 
         setMessages(prev => [...prev, sentMessage]);
         setNewMessage('');
+        setShouldScrollToBottom(true);
         
-        // Update the conversation's last message
         setConversations(prev => prev.map(conv => 
           conv.id === selectedConversation.id 
             ? {
@@ -279,9 +320,8 @@ const Unibox: React.FC = () => {
 
   const markAsRead = async (conversationId: string) => {
     try {
-      await axios.patch(`${API_BASE_URL}/conversations/${conversationId}/read`);
+      await api.patch(`/conversations/${conversationId}/read`);
       
-      // Update local state
       setConversations(prev => prev.map(conv => 
         conv.id === conversationId 
           ? { ...conv, unreadCount: 0, lastReadAt: new Date().toISOString() }
@@ -343,7 +383,22 @@ const Unibox: React.FC = () => {
   };
 
   return (
-    <Container maxWidth={false} sx={{ height: '100vh', py: 2 }}>
+    <Container 
+      maxWidth={false} 
+      sx={{ 
+        height: '100vh', 
+        py: 2,
+        overflow: 'hidden', // Completely prevent any scrolling
+        // Global scrollbar hiding
+        '& *': {
+          '&::-webkit-scrollbar': {
+            display: 'none !important',
+          },
+          scrollbarWidth: 'none',
+          msOverflowStyle: 'none',
+        }
+      }}
+    >
       <Paper 
         elevation={2} 
         sx={{ 
@@ -361,7 +416,8 @@ const Unibox: React.FC = () => {
             borderColor: 'divider',
             display: 'flex',
             flexDirection: 'column',
-            bgcolor: 'background.paper'
+            bgcolor: 'background.paper',
+            overflow: 'hidden'
           }}
         >
           {/* Header */}
@@ -372,7 +428,8 @@ const Unibox: React.FC = () => {
               borderColor: 'divider',
               display: 'flex',
               alignItems: 'center',
-              justifyContent: 'space-between'
+              justifyContent: 'space-between',
+              flexShrink: 0
             }}
           >
             <Typography variant="h6" fontWeight={600}>
@@ -393,7 +450,7 @@ const Unibox: React.FC = () => {
           </Box>
 
           {/* Search */}
-          <Box sx={{ p: 2 }}>
+          <Box sx={{ p: 2, flexShrink: 0 }}>
             <TextField
               fullWidth
               size="small"
@@ -412,15 +469,26 @@ const Unibox: React.FC = () => {
 
           {/* Sync Status */}
           {lastSync && (
-            <Box sx={{ px: 2, pb: 1 }}>
+            <Box sx={{ px: 2, pb: 1, flexShrink: 0 }}>
               <Typography variant="caption" color="text.secondary">
                 Last synced: {formatTime(lastSync.toISOString())}
               </Typography>
             </Box>
           )}
 
-          {/* Conversation List */}
-          <Box sx={{ flex: 1, overflow: 'auto' }}>
+          {/* Conversation List with Hidden Scrollbar */}
+          <Box 
+            sx={{ 
+              flex: 1, 
+              overflow: 'auto',
+              // Complete scrollbar hiding
+              '&::-webkit-scrollbar': {
+                display: 'none !important',
+              },
+              scrollbarWidth: 'none',
+              msOverflowStyle: 'none',
+            }}
+          >
             {error && (
               <Alert severity="error" sx={{ m: 2 }}>
                 {error}
@@ -530,7 +598,14 @@ const Unibox: React.FC = () => {
         </Box>
 
         {/* Chat Area */}
-        <Box sx={{ flex: 1, display: 'flex', flexDirection: 'column' }}>
+        <Box 
+          sx={{ 
+            flex: 1, 
+            display: 'flex', 
+            flexDirection: 'column',
+            overflow: 'hidden'
+          }}
+        >
           {selectedConversation ? (
             <>
               {/* Chat Header */}
@@ -541,7 +616,8 @@ const Unibox: React.FC = () => {
                   borderColor: 'divider',
                   display: 'flex',
                   alignItems: 'center',
-                  justifyContent: 'space-between'
+                  justifyContent: 'space-between',
+                  flexShrink: 0
                 }}
               >
                 <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
@@ -585,15 +661,34 @@ const Unibox: React.FC = () => {
                 </Box>
               </Box>
 
-              {/* Messages */}
+              {/* Messages with Completely Hidden Scrollbar */}
               <Box
+                ref={messagesContainerRef}
                 sx={{
                   flex: 1,
                   overflow: 'auto',
                   p: 2,
                   display: 'flex',
                   flexDirection: 'column',
-                  gap: 1
+                  gap: 1,
+                  scrollBehavior: 'smooth',
+                  // Completely hide scrollbar across all browsers
+                  '&::-webkit-scrollbar': {
+                    display: 'none !important',
+                    width: 0,
+                    height: 0,
+                  },
+                  '&::-webkit-scrollbar-track': {
+                    display: 'none !important',
+                  },
+                  '&::-webkit-scrollbar-thumb': {
+                    display: 'none !important',
+                  },
+                  '&::-webkit-scrollbar-corner': {
+                    display: 'none !important',
+                  },
+                  scrollbarWidth: 'none',
+                  msOverflowStyle: 'none',
                 }}
               >
                 {isLoadingMessages ? (
@@ -711,7 +806,8 @@ const Unibox: React.FC = () => {
                   borderColor: 'divider',
                   display: 'flex',
                   alignItems: 'flex-end',
-                  gap: 1
+                  gap: 1,
+                  flexShrink: 0
                 }}
               >
                 <IconButton size="small" color="primary">

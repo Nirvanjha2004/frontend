@@ -471,7 +471,7 @@ const CampaignList: React.FC<CampaignListProps> = ({ onRefresh }) => {
                       },
                       transition: 'background-color 0.2s'
                     }}
-                    onClick={() => navigate(`/campaigns/${campaign._id}`)}
+                    onClick={() => navigate(`/campaigns/${campaign._id}/view`)}
                   >
                     <TableCell>
                       <Box>

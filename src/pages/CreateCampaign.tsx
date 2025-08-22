@@ -243,69 +243,6 @@ const CreateCampaign: React.FC<CreateCampaignProps> = ({
     }
   }, [currentCampaign, id]);
 
-  // Fetch campaign data when in view mode
-  useEffect(() => {
-    if (viewMode && campaignId) {
-      fetchCampaignDetails();
-    }
-  }, [viewMode, campaignId]);
-
-  const fetchCampaignDetails = async () => {
-    if (!campaignId) return;
-
-    try {
-      const response = await apiCall(`/api/campaigns/${campaignId}/details`);
-      const data = await response.json();
-
-      if (data.success) {
-        const campaign = data.data.campaign;
-        const leads = data.data.leads;
-
-        setFormData({
-          name: campaign.title || campaign.name || '',
-          description: campaign.description || '',
-          csvFile: null,
-          csvUsernames: leads.map((lead: any) => lead.username) || [],
-          csvPreview: leads || [],
-          csvUserDetails: leads || [],
-          selectedCreators: leads || [],
-          filters: {
-            followerRange: { min: 1000, max: 100000 },
-            engagementRate: { min: 1, max: 10 },
-            location: [],
-            categories: [],
-            verifiedOnly: false,
-            privateAccountsOnly: false,
-          },
-          messageSequence: campaign.sequence || [
-            {
-              stepNumber: 1,
-              messageType: 'follow',
-              delayHours: 0,
-              isActive: true,
-            },
-          ],
-          senderAccounts: campaign.instagramAccounts || [],
-          operationalHours: {
-            start: '09:00',
-            end: '17:00',
-            timezone: 'UTC',
-            weekDays: [1, 2, 3, 4, 5],
-          },
-          settings: {
-            maxDailyFollows: 50,
-            maxDailyMessages: 20,
-            followUpDelay: 48,
-            randomizeDelay: true,
-            delayVariation: 30,
-          },
-        });
-      }
-    } catch (error) {
-      console.error('Error fetching campaign details:', error);
-    }
-  };
-
   // Fetch Instagram accounts for workspace
   const fetchInstagramAccounts = async () => {
     if (!user?.email) return;
@@ -822,6 +759,50 @@ travel_blogger`;
 
   const renderBasicInformationAndCreators = () => (
     <Box>
+      {viewMode && (
+        <Card sx={{ mb: 3, bgcolor: 'primary.50' }}>
+          <CardContent>
+            <Typography variant="h6" gutterBottom sx={{ display: 'flex', alignItems: 'center' }}>
+              <InstagramIcon sx={{ mr: 1, color: 'primary.main' }} />
+              Campaign Overview
+            </Typography>
+            <Box sx={{ display: 'flex', gap: 2, justifyContent: 'space-between', flexWrap: 'wrap' }}>
+              <Box sx={{ flex: 1, minWidth: 200, textAlign: 'center' }}>
+                <Typography variant="h4" color="primary.main" sx={{ fontWeight: 'bold' }}>
+                  {formData.csvUserDetails?.length || 0}
+                </Typography>
+                <Typography variant="body2" color="text.secondary">
+                  Total Influencers
+                </Typography>
+              </Box>
+              <Box sx={{ flex: 1, minWidth: 200, textAlign: 'center' }}>
+                <Typography variant="h4" color="success.main" sx={{ fontWeight: 'bold' }}>
+                  {formData.csvUserDetails?.filter((i: any) => i.overallStatus === 'completed').length || 0}
+                </Typography>
+                <Typography variant="body2" color="text.secondary">
+                  Completed
+                </Typography>
+              </Box>
+              <Box sx={{ flex: 1, minWidth: 200, textAlign: 'center' }}>
+                <Typography variant="h4" color="primary.main" sx={{ fontWeight: 'bold' }}>
+                  {formData.csvUserDetails?.filter((i: any) => i.overallStatus === 'active').length || 0}
+                </Typography>
+                <Typography variant="body2" color="text.secondary">
+                  Active
+                </Typography>
+              </Box>
+              <Box sx={{ flex: 1, minWidth: 200, textAlign: 'center' }}>
+                <Typography variant="h4" color="warning.main" sx={{ fontWeight: 'bold' }}>
+                  {formData.csvUserDetails?.filter((i: any) => i.overallStatus === 'pending' || i.overallStatus === 'scheduled').length || 0}
+                </Typography>
+                <Typography variant="body2" color="text.secondary">
+                  Pending/Scheduled
+                </Typography>
+              </Box>
+            </Box>
+          </CardContent>
+        </Card>
+      )}
       <Card sx={{ mb: 3 }}>
         <CardContent>
           <Typography variant="h6" gutterBottom sx={{ display: 'flex', alignItems: 'center' }}>
@@ -833,7 +814,7 @@ travel_blogger`;
             // View Mode: Show influencers table
             <Box>
               <Typography variant="body2" color="text.secondary" sx={{ mb: 3 }}>
-                List of influencers in this campaign with their current status and activity.
+                List of influencers in this campaign with their current status and assigned accounts.
               </Typography>
               
               {formData.csvUserDetails && formData.csvUserDetails.length > 0 ? (
@@ -841,10 +822,10 @@ travel_blogger`;
                   <Table>
                     <TableHead>
                       <TableRow>
-                        <TableCell>Influencer</TableCell>
+                        <TableCell>Username</TableCell>
                         <TableCell>Status</TableCell>
-                        <TableCell>Last Activity</TableCell>
                         <TableCell>Assigned Account</TableCell>
+                        <TableCell>Last Activity</TableCell>
                         <TableCell>Actions Progress</TableCell>
                       </TableRow>
                     </TableHead>
@@ -876,11 +857,13 @@ travel_blogger`;
                               </Box>
                               <Box>
                                 <Typography variant="subtitle2" sx={{ fontWeight: 600 }}>
-                                  {influencer.fullName || 'Unknown'}
-                                </Typography>
-                                <Typography variant="body2" color="text.secondary">
                                   @{influencer.username}
                                 </Typography>
+                                {influencer.fullName && (
+                                  <Typography variant="body2" color="text.secondary">
+                                    {influencer.fullName}
+                                  </Typography>
+                                )}
                               </Box>
                             </Box>
                           </TableCell>
@@ -896,19 +879,6 @@ travel_blogger`;
                               size="small"
                               variant="outlined"
                             />
-                          </TableCell>
-                          <TableCell>
-                            {influencer.lastActivity ? (
-                              <Tooltip title={new Date(influencer.lastActivity).toLocaleString()}>
-                                <Typography variant="body2">
-                                  {formatDistanceToNow(new Date(influencer.lastActivity), { addSuffix: true })}
-                                </Typography>
-                              </Tooltip>
-                            ) : (
-                              <Typography variant="body2" color="text.secondary">
-                                No activity
-                              </Typography>
-                            )}
                           </TableCell>
                           <TableCell>
                             {influencer.assignedAccount ? (
@@ -936,6 +906,19 @@ travel_blogger`;
                             ) : (
                               <Typography variant="body2" color="text.secondary">
                                 Not assigned
+                              </Typography>
+                            )}
+                          </TableCell>
+                          <TableCell>
+                            {influencer.lastActivity ? (
+                              <Tooltip title={new Date(influencer.lastActivity).toLocaleString()}>
+                                <Typography variant="body2">
+                                  {formatDistanceToNow(new Date(influencer.lastActivity), { addSuffix: true })}
+                                </Typography>
+                              </Tooltip>
+                            ) : (
+                              <Typography variant="body2" color="text.secondary">
+                                No activity
                               </Typography>
                             )}
                           </TableCell>
@@ -1796,15 +1779,38 @@ travel_blogger`;
           <Card>
             <CardContent>
               {viewMode ? (
-                <Box sx={{ display: 'flex', justifyContent: 'flex-end' }}>
-                  {onClose && (
-                    <Button
-                      onClick={onClose}
-                      variant="contained"
-                    >
-                      Close
-                    </Button>
-                  )}
+                <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                  <Button
+                    disabled={activeStep === 0}
+                    onClick={handleBack}
+                    variant="outlined"
+                  >
+                    Back
+                  </Button>
+                  
+                  <Typography variant="body2" color="text.secondary">
+                    Viewing Campaign - Step {activeStep + 1} of {steps.length}
+                  </Typography>
+                  
+                  <Box sx={{ display: 'flex', gap: 2 }}>
+                    {activeStep === steps.length - 1 ? (
+                      onClose && (
+                        <Button
+                          onClick={onClose}
+                          variant="contained"
+                        >
+                          Close
+                        </Button>
+                      )
+                    ) : (
+                      <Button
+                        onClick={handleNext}
+                        variant="contained"
+                      >
+                        Next
+                      </Button>
+                    )}
+                  </Box>
                 </Box>
               ) : (
                 <Box sx={{ display: 'flex', justifyContent: 'space-between' }}>

@@ -29,7 +29,7 @@ const ViewCampaign: React.FC = () => {
       if (!campaignId) return;
       
       try {
-        const response = await apiCall(`/api/campaigns/${campaignId}/details`);
+        const response = await apiCall(`/api/campaigns/${campaignId}`);
         const data = await response.json();
         
         if (data.success && data.data.campaign) {
