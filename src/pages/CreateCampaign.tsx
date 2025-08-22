@@ -393,7 +393,8 @@ const CreateCampaign: React.FC<CreateCampaignProps> = ({
         // Fetch user details from the API
         try {
           const response = await csvUploadAPI.getBatchUserDetails(usernames);
-          
+          console.log("Fetched user details:", response.data);
+
           if (response.data.success) {
             const { users, failedUsernames, totalSuccess, totalFailed } = response.data.data;
             
@@ -653,34 +654,74 @@ travel_blogger`;
       {/* Header with profile info */}
       <Box sx={{ display: 'flex', alignItems: 'center', mb: 2 }}>
         <Box sx={{ position: 'relative', mr: 2 }}>
-          <Box
-            sx={{
-              width: 50,
-              height: 50,
-              borderRadius: '50%',
-              background: `linear-gradient(45deg, ${
-                ['#f093fb', '#f5576c', '#4facfe', '#00f2fe', '#43e97b', '#38f9d7'][index % 6]
-              } 0%, ${
-                ['#f5576c', '#4facfe', '#00f2fe', '#43e97b', '#38f9d7', '#f093fb'][index % 6]
-              } 100%)`,
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-              color: 'white',
-              fontSize: '18px',
-              fontWeight: 'bold',
-            }}
-          >
-            {creator.username.charAt(0).toUpperCase()}
-          </Box>
+          {/* Profile Picture or Fallback */}
+          {creator.profilePictureUrl || creator.profilePicture || creator.avatar ? (
+            <Avatar
+              src={creator.profilePictureUrl || creator.profilePicture || creator.avatar}
+              alt={creator.username}
+              sx={{
+                width: 50,
+                height: 50,
+                border: '2px solid',
+                borderColor: 'primary.light',
+              }}
+            >
+              {creator.username.charAt(0).toUpperCase()}
+            </Avatar>
+          ) : (
+            <Box
+              sx={{
+                width: 50,
+                height: 50,
+                borderRadius: '50%',
+                background: `linear-gradient(45deg, ${
+                  ['#f093fb', '#f5576c', '#4facfe', '#00f2fe', '#43e97b', '#38f9d7'][index % 6]
+                } 0%, ${
+                  ['#f5576c', '#4facfe', '#00f2fe', '#43e97b', '#38f9d7', '#f093fb'][index % 6]
+                } 100%)`,
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                color: 'white',
+                fontSize: '18px',
+                fontWeight: 'bold',
+              }}
+            >
+              {creator.username.charAt(0).toUpperCase()}
+            </Box>
+          )}
+          
+          {/* Verification Badge */}
+          {creator.isVerified && (
+            <Box
+              sx={{
+                position: 'absolute',
+                bottom: -2,
+                right: -2,
+                width: 16,
+                height: 16,
+                borderRadius: '50%',
+                bgcolor: 'primary.main',
+                color: 'white',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                fontSize: '10px',
+                border: '2px solid white'
+              }}
+            >
+              ✓
+            </Box>
+          )}
         </Box>
+        
         <Box sx={{ flex: 1, minWidth: 0 }}>
           <Typography 
             variant="h6" 
             noWrap 
             sx={{ fontWeight: 600, fontSize: '1.1rem', mb: 0.5 }}
           >
-            {creator.fullName || creator.full_name || 'No display name'}
+            {creator.fullName || creator.name || creator.displayName || 'No display name'}
           </Typography>
           <Typography 
             variant="body2" 
@@ -689,7 +730,18 @@ travel_blogger`;
           >
             @{creator.username}
           </Typography>
+          {/* Show first and last name if available */}
+          {(creator.firstName || creator.lastName) && (
+            <Typography 
+              variant="caption" 
+              color="text.secondary"
+              sx={{ display: 'block', fontSize: '0.75rem', mt: 0.5 }}
+            >
+              {creator.firstName} {creator.lastName}
+            </Typography>
+          )}
         </Box>
+        
         {/* Enrichment status badge */}
         {creator.enriched_at && (
           <Chip
@@ -701,6 +753,26 @@ travel_blogger`;
           />
         )}
       </Box>
+
+      {/* Bio/Description */}
+      {(creator.bio || creator.biography) && (
+        <Box sx={{ mb: 2 }}>
+          <Typography 
+            variant="body2" 
+            color="text.secondary"
+            sx={{ 
+              fontSize: '0.85rem',
+              display: '-webkit-box',
+              WebkitLineClamp: 2,
+              WebkitBoxOrient: 'vertical',
+              overflow: 'hidden',
+              lineHeight: 1.3
+            }}
+          >
+            {creator.bio || creator.biography}
+          </Typography>
+        </Box>
+      )}
 
       {/* Main metrics grid */}
       <Box sx={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 1.5, mb: 2 }}>
@@ -764,6 +836,29 @@ travel_blogger`;
               Posts Analyzed
             </Typography>
           </Box>
+        </Box>
+      )}
+
+      {/* Website link if available */}
+      {creator.website && (
+        <Box sx={{ mb: 2 }}>
+          <Typography 
+            component="a"
+            href={creator.website}
+            target="_blank"
+            rel="noopener noreferrer"
+            variant="caption"
+            sx={{ 
+              color: 'primary.main',
+              textDecoration: 'none',
+              '&:hover': {
+                textDecoration: 'underline'
+              },
+              fontSize: '0.75rem'
+            }}
+          >
+            🌐 {creator.website}
+          </Typography>
         </Box>
       )}
 
@@ -882,7 +977,7 @@ travel_blogger`;
           </Typography>
           
           {viewMode ? (
-            // View Mode: Show influencers table
+            // View Mode: Show influencers table with profile pictures
             <Box>
               <Typography variant="body2" color="text.secondary" sx={{ mb: 3 }}>
                 List of influencers in this campaign with their current status.
@@ -893,7 +988,7 @@ travel_blogger`;
                   <Table>
                     <TableHead>
                       <TableRow>
-                        <TableCell>Username</TableCell>
+                        <TableCell>Profile</TableCell>
                         <TableCell>Full Name</TableCell>
                         <TableCell>Followers</TableCell>
                         <TableCell>Engagement Rate</TableCell>
@@ -905,36 +1000,65 @@ travel_blogger`;
                         <TableRow key={influencer.username || index} hover>
                           <TableCell>
                             <Box sx={{ display: 'flex', alignItems: 'center' }}>
-                              <Box
-                                sx={{
-                                  width: 40,
-                                  height: 40,
-                                  borderRadius: '50%',
-                                  background: `linear-gradient(45deg, ${
-                                    ['#f093fb', '#f5576c', '#4facfe', '#00f2fe', '#43e97b', '#38f9d7'][index % 6]
-                                  } 0%, ${
-                                    ['#f5576c', '#4facfe', '#00f2fe', '#43e97b', '#38f9d7', '#f093fb'][index % 6]
-                                  } 100%)`,
-                                  display: 'flex',
-                                  alignItems: 'center',
-                                  justifyContent: 'center',
-                                  color: 'white',
-                                  fontSize: '14px',
-                                  fontWeight: 'bold',
-                                  mr: 2
-                                }}
-                              >
-                                {(influencer.username || '?').charAt(0).toUpperCase()}
+                              {influencer.profilePictureUrl || influencer.profilePicture || influencer.avatar ? (
+                                <Avatar
+                                  src={influencer.profilePictureUrl || influencer.profilePicture || influencer.avatar}
+                                  alt={influencer.username}
+                                  sx={{
+                                    width: 40,
+                                    height: 40,
+                                    mr: 2,
+                                    border: '1px solid',
+                                    borderColor: 'divider'
+                                  }}
+                                >
+                                  {(influencer.username || '?').charAt(0).toUpperCase()
+                                  }
+                                </Avatar>
+                              ) : (
+                                <Box
+                                  sx={{
+                                    width: 40,
+                                    height: 40,
+                                    borderRadius: '50%',
+                                    background: `linear-gradient(45deg, ${
+                                      ['#f093fb', '#f5576c', '#4facfe', '#00f2fe', '#43e97b', '#38f9d7'][index % 6]
+                                    } 0%, ${
+                                      ['#f5576c', '#4facfe', '#00f2fe', '#43e97b', '#38f9d7', '#f093fb'][index % 6]
+                                    } 100%)`,
+                                    display: 'flex',
+                                    alignItems: 'center',
+                                    justifyContent: 'center',
+                                    color: 'white',
+                                    fontSize: '14px',
+                                    fontWeight: 'bold',
+                                    mr: 2
+                                  }}
+                                >
+                                  {(influencer.username || '?').charAt(0).toUpperCase()}
+                                </Box>
+                              )}
+                              <Box>
+                                <Typography variant="subtitle2" sx={{ fontWeight: 600 }}>
+                                  @{influencer.username}
+                                </Typography>
+                                {influencer.isVerified && (
+                                  <Typography variant="caption" color="primary.main">
+                                    ✓ Verified
+                                  </Typography>
+                                )}
                               </Box>
-                              <Typography variant="subtitle2" sx={{ fontWeight: 600 }}>
-                                @{influencer.username}
-                              </Typography>
                             </Box>
                           </TableCell>
                           <TableCell>
                             <Typography variant="body2">
-                              {influencer.fullName || influencer.full_name || 'N/A'}
+                              {influencer.fullName || influencer.name || influencer.displayName || 'N/A'}
                             </Typography>
+                            {(influencer.firstName || influencer.lastName) && (
+                              <Typography variant="caption" color="text.secondary" sx={{ display: 'block' }}>
+                                {influencer.firstName} {influencer.lastName}
+                              </Typography>
+                            )}
                           </TableCell>
                           <TableCell>
                             <Typography variant="body2">
