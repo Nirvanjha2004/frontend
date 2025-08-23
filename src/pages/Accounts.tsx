@@ -73,17 +73,20 @@ const API_BASE_URL = process.env.REACT_APP_API_URL || 'http://localhost:5000/api
 const Accounts: React.FC = () => {
   const [accounts, setAccounts] = useState<InstagramAccount[]>([]);
   const [connectDialogOpen, setConnectDialogOpen] = useState(false);
+  const [connectionMethod, setConnectionMethod] = useState<'extension' | 'manual'>('extension');
   const [isLoading, setIsLoading] = useState(false);
   const [isRefreshing, setIsRefreshing] = useState(false);
+  const [isConnecting, setIsConnecting] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [connectionError, setConnectionError] = useState<string | null>(null);
   const [newAccountData, setNewAccountData] = useState({
     username: '',
-    accessToken: '',
+    password: '',
   });
 
-  // Get user email from Redux state (assuming it's stored there)
+  // Get user email from Redux state
   const user = useAppSelector((state) => state.auth?.user);
-  const userEmail = user?.email || 'test@example.com'; // Fallback for testing
+  const userEmail = user?.email || 'test@example.com';
 
   useEffect(() => {
     fetchAccounts();
@@ -144,16 +147,57 @@ const Accounts: React.FC = () => {
   };
 
   const handleConnectAccount = async () => {
-    setIsLoading(true);
-    // This would integrate with the Chrome extension or manual connection
-    // For now, we'll just show a message
-    setTimeout(() => {
+    if (connectionMethod === 'manual') {
+      await handleManualConnection();
+    } else {
+      // Show extension instructions
       setConnectDialogOpen(false);
-      setNewAccountData({ username: '', accessToken: '' });
-      setIsLoading(false);
-      // Refresh accounts after connection
-      fetchAccounts();
-    }, 2000);
+    }
+  };
+
+  const handleManualConnection = async () => {
+    if (!newAccountData.username || !newAccountData.password) {
+      setConnectionError('Please enter both username and password');
+      return;
+    }
+
+    setIsConnecting(true);
+    setConnectionError(null);
+
+    try {
+      const response = await axios.post(`${API_BASE_URL}/instagram/connect-account`, {
+        username: newAccountData.username,
+        password: newAccountData.password,
+        workspaceEmail: userEmail,
+      });
+
+      if (response.data.success) {
+        // Success - close dialog and refresh accounts
+        setConnectDialogOpen(false);
+        setNewAccountData({ username: '', password: '' });
+        await fetchAccounts();
+        
+        // Show success message
+        setError(null);
+      } else {
+        setConnectionError(response.data.message || 'Failed to connect account');
+      }
+    } catch (error: any) {
+      console.error('Manual connection error:', error);
+      setConnectionError(
+        error.response?.data?.message || 
+        'Failed to connect account. Please check your credentials and try again.'
+      );
+    } finally {
+      setIsConnecting(false);
+    }
+  };
+
+  const resetConnectionDialog = () => {
+    setConnectDialogOpen(false);
+    setConnectionMethod('extension');
+    setConnectionError(null);
+    setNewAccountData({ username: '', password: '' });
   };
 
   const handleToggleStatus = async (accountId: string) => {
@@ -182,7 +226,7 @@ const Accounts: React.FC = () => {
     try {
       setIsLoading(true);
       
-      const response = await fetch(`http://localhost:5000/api/instagram/accounts/${accountToDelete.id}`, {
+      const response = await fetch(`http://localhost:5000/api/instagram/${accountToDelete.id}`, {
         method: 'DELETE',
         headers: {
           'Content-Type': 'application/json',
@@ -734,10 +778,10 @@ const Accounts: React.FC = () => {
         </Card>
       )}
 
-      {/* Connect Account Dialog */}
+      {/* Updated Connect Account Dialog */}
       <Dialog
         open={connectDialogOpen}
-        onClose={() => setConnectDialogOpen(false)}
+        onClose={resetConnectionDialog}
         maxWidth="sm"
         fullWidth
         PaperProps={{
@@ -754,57 +798,227 @@ const Accounts: React.FC = () => {
           </Box>
         </DialogTitle>
         <DialogContent sx={{ pt: 2 }}>
-          <Alert severity="info" sx={{ mb: 3 }}>
-            <Typography variant="body2" sx={{ mb: 2 }}>
-              To connect your Instagram account, please use our Chrome extension:
+          {/* Connection Method Selection */}
+          <Box sx={{ mb: 3 }}>
+            <Typography variant="subtitle2" sx={{ mb: 2 }}>
+              Choose Connection Method:
             </Typography>
-            <Typography variant="body2" component="ol" sx={{ pl: 2, mb: 2 }}>
-              <li>Install the InstaMessage Chrome Extension</li>
-              <li>Open Instagram in a new tab and log in</li>
-              <li>Click the extension icon and enter your workspace email</li>
-              <li>Click "Connect Account" to link your Instagram account</li>
-            </Typography>
-            <Typography variant="body2" color="text.secondary">
-              The extension will securely capture your authentication data and connect it to your workspace.
-            </Typography>
-          </Alert>
-          
-          <Box sx={{ 
-            textAlign: 'center', 
-            py: 3,
-            border: '2px dashed',
-            borderColor: 'divider',
-            borderRadius: 2,
-            bgcolor: 'background.paper'
-          }}>
-            <Typography variant="h6" color="primary" sx={{ mb: 1 }}>
-              Chrome Extension Required
-            </Typography>
-            <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
-              Manual account connection is not available. Please use the Chrome extension for secure authentication.
-            </Typography>
-            <Button
-              variant="outlined"
-              href="chrome://extensions/"
-              target="_blank"
-              startIcon={<InstagramIcon />}
-            >
-              Manage Extensions
-            </Button>
+            <Box sx={{ display: 'flex', gap: 1 }}>
+              <Button
+                variant={connectionMethod === 'extension' ? 'contained' : 'outlined'}
+                onClick={() => setConnectionMethod('extension')}
+                startIcon={<SecurityIcon />}
+                sx={{ 
+                  flex: 1,
+                  textTransform: 'none',
+                  borderRadius: 1
+                }}
+              >
+                Chrome Extension (Recommended)
+              </Button>
+              <Button
+                variant={connectionMethod === 'manual' ? 'contained' : 'outlined'}
+                onClick={() => setConnectionMethod('manual')}
+                startIcon={<EditIcon />}
+                sx={{ 
+                  flex: 1,
+                  textTransform: 'none',
+                  borderRadius: 1
+                }}
+              >
+                Manual Login
+              </Button>
+            </Box>
           </Box>
+
+          {connectionMethod === 'extension' ? (
+            // Chrome Extension Instructions
+            <>
+              <Alert severity="info" sx={{ mb: 3 }}>
+                <Typography variant="body2" sx={{ mb: 2 }}>
+                  <strong>Secure Connection via Chrome Extension:</strong>
+                </Typography>
+                <Typography variant="body2" component="ol" sx={{ pl: 2, mb: 2 }}>
+                  <li>Install the InstaMessage Chrome Extension</li>
+                  <li>Open Instagram in a new tab and log in</li>
+                  <li>Click the extension icon and enter your workspace email</li>
+                  <li>Click "Connect Account" to link your Instagram account</li>
+                </Typography>
+                <Typography variant="body2" color="text.secondary">
+                  The extension securely captures authentication data without storing your password.
+                </Typography>
+              </Alert>
+              
+              <Box sx={{ 
+                textAlign: 'center', 
+                py: 3,
+                border: '2px dashed',
+                borderColor: 'primary.main',
+                borderRadius: 2,
+                bgcolor: 'primary.50'
+              }}>
+                <SecurityIcon sx={{ fontSize: 48, color: 'primary.main', mb: 2 }} />
+                <Typography variant="h6" color="primary.main" sx={{ mb: 1 }}>
+                  Most Secure Method
+                </Typography>
+                <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
+                  Uses Instagram's official authentication without storing passwords
+                </Typography>
+                <Button
+                  variant="contained"
+                  href="chrome://extensions/"
+                  target="_blank"
+                  startIcon={<InstagramIcon />}
+                  sx={{ textTransform: 'none' }}
+                >
+                  Manage Extensions
+                </Button>
+              </Box>
+            </>
+          ) : (
+            // Manual Login Form
+            <>
+              <Alert severity="warning" sx={{ mb: 3 }}>
+                <Typography variant="body2" sx={{ mb: 1 }}>
+                  <strong>Manual Connection Notice:</strong>
+                </Typography>
+                <Typography variant="body2" component="ul" sx={{ pl: 2 }}>
+                  <li>Your credentials will be encrypted and securely stored</li>
+                  <li>We recommend using the Chrome extension for better security</li>
+                  <li>Two-factor authentication accounts may require app passwords</li>
+                  <li>Rate limits may apply to prevent account restrictions</li>
+                </Typography>
+              </Alert>
+
+              {connectionError && (
+                <Alert severity="error" sx={{ mb: 2 }}>
+                  {connectionError}
+                </Alert>
+              )}
+
+              <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
+                <TextField
+                  fullWidth
+                  label="Instagram Username"
+                  placeholder="Enter your Instagram username"
+                  value={newAccountData.username}
+                  onChange={(e) => setNewAccountData(prev => ({ 
+                    ...prev, 
+                    username: e.target.value.trim().toLowerCase() 
+                  }))}
+                  disabled={isConnecting}
+                  InputProps={{
+                    startAdornment: (
+                      <Box sx={{ mr: 1, color: 'text.secondary' }}>
+                        @
+                      </Box>
+                    )
+                  }}
+                  sx={{
+                    '& .MuiOutlinedInput-root': {
+                      borderRadius: 1
+                    }
+                  }}
+                />
+                
+                <TextField
+                  fullWidth
+                  type="password"
+                  label="Instagram Password"
+                  placeholder="Enter your Instagram password"
+                  value={newAccountData.password}
+                  onChange={(e) => setNewAccountData(prev => ({ 
+                    ...prev, 
+                    password: e.target.value 
+                  }))}
+                  disabled={isConnecting}
+                  sx={{
+                    '& .MuiOutlinedInput-root': {
+                      borderRadius: 1
+                    }
+                  }}
+                />
+
+                <Alert severity="info" sx={{ mt: 1 }}>
+                  <Typography variant="caption">
+                    <strong>Security Note:</strong> Your password is encrypted using industry-standard 
+                    encryption before transmission and storage. We never store plain text passwords.
+                  </Typography>
+                </Alert>
+              </Box>
+
+              <Box sx={{ 
+                mt: 3,
+                p: 2,
+                border: '1px solid',
+                borderColor: 'warning.main',
+                borderRadius: 1,
+                bgcolor: 'warning.50'
+              }}>
+                <Typography variant="subtitle2" color="warning.dark" sx={{ mb: 1 }}>
+                  Two-Factor Authentication (2FA) Accounts:
+                </Typography>
+                <Typography variant="body2" color="text.secondary">
+                  If your account has 2FA enabled, you may need to:
+                  <br />• Generate an app-specific password from Instagram settings
+                  <br />• Or use the Chrome extension method instead
+                </Typography>
+              </Box>
+            </>
+          )}
         </DialogContent>
+        
         <DialogActions sx={{ p: 3 }}>
           <Button 
-            onClick={() => setConnectDialogOpen(false)} 
-            variant="contained"
+            onClick={resetConnectionDialog}
+            variant="outlined"
+            disabled={isConnecting}
             sx={{
               borderRadius: 1,
               textTransform: 'none',
-              boxShadow: '0 1px 3px rgba(0,0,0,0.1)'
+              borderColor: 'divider'
             }}
           >
-            Got it
+            Cancel
           </Button>
+          
+          {connectionMethod === 'manual' ? (
+            <Button
+              onClick={handleConnectAccount}
+              variant="contained"
+              disabled={
+                isConnecting || 
+                !newAccountData.username || 
+                !newAccountData.password
+              }
+              startIcon={
+                isConnecting ? (
+                  <CircularProgress size={20} color="inherit" />
+                ) : (
+                  <InstagramIcon />
+                )
+              }
+              sx={{
+                borderRadius: 1,
+                textTransform: 'none',
+                boxShadow: '0 1px 3px rgba(0,0,0,0.1)'
+              }}
+            >
+              {isConnecting ? 'Connecting...' : 'Connect Account'}
+            </Button>
+          ) : (
+            <Button
+              onClick={resetConnectionDialog}
+              variant="contained"
+              sx={{
+                borderRadius: 1,
+                textTransform: 'none',
+                boxShadow: '0 1px 3px rgba(0,0,0,0.1)'
+              }}
+            >
+              Got it
+            </Button>
+          )}
         </DialogActions>
       </Dialog>
 
